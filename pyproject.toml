@@ -1,0 +1,50 @@
+[project]
+name = "fileglancer-central"
+version = "0.1.0"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.12"
+# Runtime dependencies below
+dependencies = [
+    "fastapi >=0.115",
+    "uvicorn >=0.34",
+    "sqlalchemy >=2.0",
+    "aiosqlite >=0.21.0",
+    "pandas >=2.2.3",
+    "pydantic >=2.10",
+    "pydantic-settings >=2.8",
+    "loguru >=0.7.2",
+    "atlassian-python-api >=3.41",
+]
+classifiers = [
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest",
+    "pytest-cov",
+]
+
+[tool.pixi.project]
+channels = ["conda-forge"]
+platforms = ["osx-arm64", "osx-64", "linux-64"]
+
+[tool.pixi.pypi-dependencies]
+fileglancer-central = { path = ".", editable = true }
+
+[tool.pixi.tasks]
+dev-install = "pip install -e ."
+
+[tool.pixi.feature.test.tasks]
+test = "pytest"
+
+[tool.pixi.environments]
+default = {features = [], solve-group = "default"}
+test = {features = ["test"], solve-group = "default"}
+
+[tool.pixi.dependencies]
+python = "3.12.*"
+pip = ">=25.0.1,<26"
+ipykernel = "*"
