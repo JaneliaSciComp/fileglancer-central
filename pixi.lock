@@ -1454,7 +1454,7 @@ packages:
 - pypi: .
   name: fileglancer-central
   version: 0.1.0
-  sha256: c0544bb2abc4c12e4f8313f3f0af376f4f85628739099a959493cfe9b333fa5b
+  sha256: 0820a6a75e6f859b05d3aeb80b0bfe8c4360088a28c11ec62080e8ba04ffa4df
   requires_dist:
   - fastapi>=0.115
   - uvicorn>=0.34
