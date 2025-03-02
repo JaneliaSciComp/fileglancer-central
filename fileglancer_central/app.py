@@ -83,11 +83,11 @@ def create_app(settings):
 
     @app.get("/file-share-paths", response_model=List[FileSharePath], 
              description="Get all file share paths from the database")
-    async def get_file_share_paths() -> List[FileSharePath]:
+    async def get_file_share_paths(force_refresh: bool = False) -> List[FileSharePath]:
         session = get_db_session()
 
         last_refresh = get_last_refresh(session)
-        if not last_refresh or (datetime.now() - last_refresh.db_last_updated).days >= 1:
+        if not last_refresh or (datetime.now() - last_refresh.db_last_updated).days >= 1 or force_refresh:
             logger.info("Last refresh was more than a day ago, checking for updates...")
             confluence_url = app.settings.confluence_url
             confluence_token = app.settings.confluence_token
