@@ -1,5 +1,6 @@
 from typing import List, Dict, Optional
 from functools import cache
+import sys
 
 from pathlib import Path
 from pydantic import HttpUrl, BaseModel
@@ -9,6 +10,7 @@ from pydantic_settings import (
     SettingsConfigDict,
     YamlConfigSettingsSource
 )
+from loguru import logger
 
 class Target(BaseModel):
     name: str
@@ -38,24 +40,12 @@ class Settings(BaseSettings):
     )
 
     def __init__(self, **data) -> None:
-        super().__init__(**data)
-
-
-    def get_target_map(self):
-        return {t.name.lower(): t for t in self.targets}
-
-
-    def get_browseable_targets(self):
-        return [target.name for target in self.targets if target.browseable]
-
-
-    def get_target_config(self, name):
-        if name:
-            key = name.lower()
-            target_map = self.get_target_map()
-            if key in target_map:
-                return target_map[key]
-        return None
+        try:
+            super().__init__(**data)
+        except ValueError as e:
+            if "confluence_token" in str(e):
+                logger.error("Confluence token is required but not provided. Please set FGC_CONFLUENCE_TOKEN environment variable or add it to config.yaml")
+            raise e
 
   
     @classmethod

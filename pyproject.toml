@@ -36,6 +36,7 @@ fileglancer-central = { path = ".", editable = true }
 
 [tool.pixi.tasks]
 dev-install = "pip install -e ."
+dev-launch = "pixi run uvicorn fileglancer_central.app:app --host 0.0.0.0 --workers 1 --port 7878 --reload"
 
 [tool.pixi.feature.test.tasks]
 test = "pytest"
