@@ -7,37 +7,35 @@ To use this script you must create a Personal Access Token and save it into your
 https://wikis.janelia.org/plugins/personalaccesstokens/usertokens.action
 """
 
-import os
 from io import StringIO
 import pandas as pd
 from datetime import datetime
 from atlassian import Confluence
-from .database import get_db_session, update_file_share_paths
 from .settings import get_settings
 from loguru import logger
 settings = get_settings()
 
+confluence_space = "SCS"
+confluence_page = "Lab and Project File Share Paths"
 
 def parse_iso_timestamp(timestamp):
     """Parse ISO format timestamp string to datetime object"""
     return datetime.fromisoformat(timestamp)
 
 
-def get_wiki_table():
+def get_wiki_table(confluence_url, confluence_token):
     """Fetch and parse the file share paths table from the wiki"""
-    confluence_url = settings.confluence_url
-    confluence_pat = settings.confluence_token
-    confluence = Confluence(url=str(confluence_url), token=confluence_pat)
+    confluence = Confluence(url=str(confluence_url), token=confluence_token)
     
-    page = confluence.get_page_by_title("SCS", "Lab and Project File Share Paths")
+    page = confluence.get_page_by_title(confluence_space, confluence_page)
     page_id = page['id']
     page = confluence.get_page_by_id(page_id, status=None, version=None,
                 expand="body.view,metadata.labels,ancestors,history,history.lastUpdated")
 
+    # Get the last updated timestamp for the table
+    table_last_updated = None
     if 'lastUpdated' in page['history']:
-        lastUpdated = page['history']['lastUpdated']['when']
-        lastUpdated = parse_iso_timestamp(lastUpdated)
-        print(lastUpdated)
+        table_last_updated = parse_iso_timestamp(page['history']['lastUpdated']['when'])
 
     body = page['body']['view']['value']
     tables = pd.read_html(StringIO(body))
@@ -53,15 +51,4 @@ def get_wiki_table():
                 last_valid_value = value
     
     logger.debug(f"Found {len(table)} file share paths in the wiki")  
-    return table
-
-
-def refresh_paths():
-    """Refresh the file share paths from the wiki"""
-    session = get_db_session()
-    table = get_wiki_table()
-    update_file_share_paths(session, table)
-
-
-if __name__ == "__main__":
-    refresh_paths()
+    return table, table_last_updated

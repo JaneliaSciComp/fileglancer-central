@@ -1,5 +1,4 @@
 
-import sys
 from typing import List, Optional
 
 from loguru import logger
@@ -9,9 +8,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
 from fileglancer_central.settings import get_settings
-from fileglancer_central.database import get_db_session, get_all_paths, get_last_refresh
-from fileglancer_central.wiki import refresh_paths
+from fileglancer_central.database import get_db_session, get_all_paths, get_last_refresh, update_file_share_paths
+from fileglancer_central.wiki import get_wiki_table
+from fileglancer_central.logger import init_logging
 from datetime import datetime   
+
+
+def refresh_file_share_paths(session, confluence_url, confluence_token):
+    """Refresh the file share paths from the wiki"""
+    table, tableLastUpdated = get_wiki_table(confluence_url, confluence_token)
+    update_file_share_paths(session, table, tableLastUpdated)
+
 
 class FileSharePath(BaseModel):
     """A file share path from the database"""
@@ -67,9 +74,10 @@ def create_app(settings):
             app.settings = settings
 
         # Configure logging
-        logger.remove()
-        logger.add(sys.stderr, level=app.settings.log_level)
+        # logger.remove()
+        # logger.add(sys.stderr, level=app.settings.log_level)
 
+        init_logging()
         logger.info(f"Server ready")
 
 
@@ -84,15 +92,21 @@ def create_app(settings):
         session = get_db_session()
 
         last_refresh = get_last_refresh(session)
-        if last_refresh and (datetime.now() - last_refresh).days >= 1:
-            logger.info("Last refresh was more than a day ago, refreshing file share paths...")
-            refresh_paths()
+        if not last_refresh or (datetime.now() - last_refresh.db_last_updated).days >= 1:
+            logger.info("Last refresh was more than a day ago, checking for updates...")
+            confluence_url = app.settings.confluence_url
+            confluence_token = app.settings.confluence_token
+            table, table_last_updated = get_wiki_table(confluence_url, confluence_token)
+
+            if not last_refresh or table_last_updated != last_refresh.source_last_updated:
+                logger.info("Wiki table has changed, refreshing file share paths...")
+                update_file_share_paths(session, table, table_last_updated)
 
         paths = get_all_paths(session)
         
         return [FileSharePath(
             zone=path.lab,
-            group=path.ad_group,
+            group=path.group,
             storage=path.storage,
             mac_path=path.mac_path, 
             smb_path=path.smb_path,
@@ -106,5 +120,4 @@ app = create_app(get_settings)
 
 if __name__ == "__main__":
     import uvicorn
-    print(app)
     uvicorn.run(app, host="0.0.0.0", port=8000, lifespan="on")
