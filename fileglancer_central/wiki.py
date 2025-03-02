@@ -12,7 +12,7 @@ from io import StringIO
 import pandas as pd
 from datetime import datetime
 from atlassian import Confluence
-from .database import get_db_session, update_database
+from .database import get_db_session, update_file_share_paths
 from .settings import get_settings
 from loguru import logger
 settings = get_settings()
@@ -56,7 +56,12 @@ def get_wiki_table():
     return table
 
 
-if __name__ == "__main__":
+def refresh_paths():
+    """Refresh the file share paths from the wiki"""
     session = get_db_session()
     table = get_wiki_table()
-    update_database(session, table)
+    update_file_share_paths(session, table)
+
+
+if __name__ == "__main__":
+    refresh_paths()

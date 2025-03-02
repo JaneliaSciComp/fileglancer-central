@@ -3,8 +3,9 @@ from fileglancer_central.settings import get_settings
 from loguru import logger
 settings = get_settings()
 
-from sqlalchemy import create_engine, Column, String, Integer
+from sqlalchemy import create_engine, Column, String, Integer, DateTime
 from sqlalchemy.orm import sessionmaker, declarative_base
+from datetime import datetime
 
 Base = declarative_base()
 
@@ -12,11 +13,17 @@ class FileSharePathDB(Base):
     __tablename__ = 'file_share_paths'
     id = Column(Integer, primary_key=True, autoincrement=True)
     lab = Column(String)
+    group = Column(String, index=True)
     storage = Column(String)
     mac_path = Column(String)
     smb_path = Column(String)
     linux_path = Column(String, index=True, unique=True)
-    ad_group = Column(String, index=True)
+    
+
+class LastRefreshDB(Base):
+    __tablename__ = 'last_refresh'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    refresh_time = Column(DateTime, nullable=False)
 
 
 def get_db_session():
@@ -33,8 +40,17 @@ def get_all_paths(session):
     return session.query(FileSharePathDB).all()
 
 
-def update_database(session, table):
-    """Update database with new table data"""
+def get_last_refresh(session):
+    """Get the last refresh time from the database"""
+    last_refresh = session.query(LastRefreshDB).first()
+    if last_refresh:
+        return last_refresh.refresh_time
+    else:
+        return None
+
+
+def update_file_share_paths(session, table, max_paths_to_delete=2):
+    """Update database with new file share paths"""
     # Get all existing linux_paths from database
     existing_paths = {path[0] for path in session.query(FileSharePathDB.linux_path).all()}
     new_paths = set()
@@ -77,7 +93,14 @@ def update_database(session, table):
     # Delete records that no longer exist in the wiki
     paths_to_delete = existing_paths - new_paths
     if paths_to_delete:
-        logger.debug(f"Deleting {len(paths_to_delete)} defunct file share paths from the database")
-        session.query(FileSharePathDB).filter(FileSharePathDB.linux_path.in_(paths_to_delete)).delete(synchronize_session='fetch')
+        if len(paths_to_delete) > max_paths_to_delete:
+            logger.warning(f"Cannot delete {len(paths_to_delete)} defunct file share paths from the database, only {max_paths_to_delete} are allowed")
+        else:
+            logger.debug(f"Deleting {len(paths_to_delete)} defunct file share paths from the database")
+            session.query(FileSharePathDB).filter(FileSharePathDB.linux_path.in_(paths_to_delete)).delete(synchronize_session='fetch')
+
+    # Update last refresh time
+    session.query(LastRefreshDB).delete()
+    session.add(LastRefreshDB(refresh_time=datetime.now()))
 
     session.commit()

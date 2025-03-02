@@ -9,8 +9,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
 from fileglancer_central.settings import get_settings
-from fileglancer_central.database import get_db_session, get_all_paths
-
+from fileglancer_central.database import get_db_session, get_all_paths, get_last_refresh
+from fileglancer_central.wiki import refresh_paths
+from datetime import datetime   
 
 class FileSharePath(BaseModel):
     """A file share path from the database"""
@@ -81,6 +82,12 @@ def create_app(settings):
              description="Get all file share paths from the database")
     async def get_file_share_paths() -> List[FileSharePath]:
         session = get_db_session()
+
+        last_refresh = get_last_refresh(session)
+        if last_refresh and (datetime.now() - last_refresh).days >= 1:
+            logger.info("Last refresh was more than a day ago, refreshing file share paths...")
+            refresh_paths()
+
         paths = get_all_paths(session)
         
         return [FileSharePath(
@@ -94,10 +101,10 @@ def create_app(settings):
 
     return app
 
+
 app = create_app(get_settings)
 
 if __name__ == "__main__":
     import uvicorn
     print(app)
     uvicorn.run(app, host="0.0.0.0", port=8000, lifespan="on")
-
