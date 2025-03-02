@@ -3,20 +3,35 @@ import sys
 from typing import List, Optional
 
 from loguru import logger
-from pydantic import BaseModel
-from fastapi import FastAPI, HTTPException, Request, Query
-from fastapi.responses import JSONResponse, FileResponse, PlainTextResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel, Field
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.exceptions import RequestValidationError
 from fastapi.responses import RedirectResponse
-from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from fileglancer_central.settings import get_settings, Target
+from fileglancer_central.settings import get_settings
 from fileglancer_central.database import get_db_session, get_all_paths
 
 
+class FileSharePath(BaseModel):
+    """A file share path from the database"""
+    zone: str = Field(
+        description="The zone (main grouping) for the file share"
+    )
+    group: Optional[str] = Field(
+        description="The group that owns the file share"
+    )
+    storage: Optional[str] = Field(
+        description="The storage type of the file share"
+    )
+    mac_path: Optional[str] = Field(
+        description="The path to mount the file share on Mac"
+    )
+    smb_path: Optional[str] = Field(
+        description="The path to mount the file share on Windows" 
+    )
+    linux_path: Optional[str] = Field(
+        description="The path to mount the file share on Linux"
+    )
 
 def create_app(settings):
 
@@ -62,33 +77,19 @@ def create_app(settings):
         return RedirectResponse("/docs")
 
 
-    class FileSharePath(BaseModel):
-        """A file share path from the database"""
-        lab: str
-        """The lab that owns the file share"""
-        storage: str
-        """The storage type of the file share"""
-        mac_path: str
-        """The path to the file share on the Mac"""
-        smb_path: str
-        """The path to the file share on the Windows network"""
-        linux_path: str
-        """The path to the file share on the Linux server"""
-        ad_group: str
-
-    @app.get("/paths", response_model=List[FileSharePath], 
+    @app.get("/file-share-paths", response_model=List[FileSharePath], 
              description="Get all file share paths from the database")
-    async def get_paths() -> List[FileSharePath]:
+    async def get_file_share_paths() -> List[FileSharePath]:
         session = get_db_session()
         paths = get_all_paths(session)
         
         return [FileSharePath(
-            lab=path.lab,
+            zone=path.lab,
+            group=path.ad_group,
             storage=path.storage,
             mac_path=path.mac_path, 
             smb_path=path.smb_path,
             linux_path=path.linux_path,
-            ad_group=path.ad_group
         ) for path in paths]
 
     return app
