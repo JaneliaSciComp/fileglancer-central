@@ -13,6 +13,7 @@ from fileglancer_central.database import get_db_session, get_all_paths, get_last
 from fileglancer_central.wiki import get_wiki_table
 from datetime import datetime   
 
+from contextlib import asynccontextmanager
 
 class FileSharePath(BaseModel):
     """A file share path from the database"""
@@ -57,11 +58,9 @@ def create_app(settings):
         return JSONResponse({"error":str(exc)}, status_code=400)
     
 
-    @app.on_event("startup")
-    async def startup_event():
-        """ Runs once when the service is first starting.
-            Reads the configuration and sets up the proxy clients. 
-        """
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        # Setup
         if callable(settings):
             app.settings = settings()
         else:
@@ -72,7 +71,10 @@ def create_app(settings):
         logger.add(sys.stderr, level=app.settings.log_level)
 
         logger.info(f"Server ready")
+        yield
+        # Cleanup (if needed)
 
+    app = FastAPI(lifespan=lifespan)
 
     @app.get("/", include_in_schema=False)
     async def docs_redirect():
