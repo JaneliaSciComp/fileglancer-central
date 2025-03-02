@@ -173,3 +173,9 @@ cython_debug/
 # pixi environments
 .pixi
 *.egg-info
+
+# sqlite databases
+*.db
+
+# config
+config.yaml

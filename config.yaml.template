@@ -1,0 +1,17 @@
+#
+# Loguru logging level (ERROR, WARNING, INFO, DEBUG, TRACE)
+#
+log_level: INFO
+
+#
+# Database URL
+#
+db_url: sqlite:///fileglancer.db
+
+#
+# Confluence URL
+#
+confluence_url: https://wikis.janelia.org 
+
+
+
