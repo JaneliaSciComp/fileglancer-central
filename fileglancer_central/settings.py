@@ -26,7 +26,7 @@ class Settings(BaseSettings):
         be passed in the environment or in a .env file. 
     """
 
-    log_level: str = 'INFO'
+    log_level: str = 'DEBUG'
     db_url: str = 'sqlite:///fileglancer.db'
     confluence_url: HttpUrl = 'https://wikis.janelia.org'
     confluence_token: str

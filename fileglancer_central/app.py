@@ -1,23 +1,17 @@
-
+import sys
 from typing import List, Optional
 
 from loguru import logger
 from pydantic import BaseModel, Field
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, JSONResponse
+from fastapi.exceptions import RequestValidationError, StarletteHTTPException
 
 from fileglancer_central.settings import get_settings
 from fileglancer_central.database import get_db_session, get_all_paths, get_last_refresh, update_file_share_paths
 from fileglancer_central.wiki import get_wiki_table
-from fileglancer_central.logger import init_logging
 from datetime import datetime   
-
-
-def refresh_file_share_paths(session, confluence_url, confluence_token):
-    """Refresh the file share paths from the wiki"""
-    table, tableLastUpdated = get_wiki_table(confluence_url, confluence_token)
-    update_file_share_paths(session, table, tableLastUpdated)
 
 
 class FileSharePath(BaseModel):
@@ -53,14 +47,14 @@ def create_app(settings):
         expose_headers=["Range", "Content-Range"],
     )
 
-    # @app.exception_handler(StarletteHTTPException)
-    # async def http_exception_handler(request, exc):
-    #     return JSONResponse({"error":str(exc.detail)}, status_code=exc.status_code)
+    @app.exception_handler(StarletteHTTPException)
+    async def http_exception_handler(request, exc):
+        return JSONResponse({"error":str(exc.detail)}, status_code=exc.status_code)
 
 
-    # @app.exception_handler(RequestValidationError)
-    # async def validation_exception_handler(request, exc):
-    #     return JSONResponse({"error":str(exc)}, status_code=400)
+    @app.exception_handler(RequestValidationError)
+    async def validation_exception_handler(request, exc):
+        return JSONResponse({"error":str(exc)}, status_code=400)
     
 
     @app.on_event("startup")
@@ -73,11 +67,10 @@ def create_app(settings):
         else:
             app.settings = settings
 
-        # Configure logging
-        # logger.remove()
-        # logger.add(sys.stderr, level=app.settings.log_level)
+        # Configure logging based on the log level in the settings
+        logger.remove()
+        logger.add(sys.stderr, level=app.settings.log_level)
 
-        init_logging()
         logger.info(f"Server ready")
 
 
