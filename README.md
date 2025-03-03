@@ -32,7 +32,7 @@ Run the development server:
 pixi run dev-launch
 ```
 
-# Architecture
+## Architecture
 
 The Fileglancer Central service is a backend service optionally used by Fileglancer to access various other services, including a shared metadata database. The diagram below shows how it fits into the larger Fileglancer deployment at Janelia. 
 
