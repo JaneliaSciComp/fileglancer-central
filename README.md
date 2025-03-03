@@ -1,6 +1,6 @@
 # Fileglancer Central
 
-Central metadata server for [Fileglancer](https://github.com/JaneliaSciComp/fileglancer) deployments.
+Central data service for [Fileglancer](https://github.com/JaneliaSciComp/fileglancer) deployments which makes it possible for Fileglancer to access Janelia services such as JIRA and the Janelia Confluence Wiki. 
 
 ## Development install
 
@@ -31,4 +31,12 @@ Run the development server:
 ```bash
 pixi run dev-launch
 ```
+
+# Architecture
+
+The Fileglancer Central service is a backend service optionally used by Fileglancer to access various other services, including a shared metadata database. The diagram below shows how it fits into the larger Fileglancer deployment at Janelia. 
+
+![Fileglancer Architecture drawio](https://github.com/user-attachments/assets/216353d2-082d-4292-a2eb-b72004087110)
+
+
 
