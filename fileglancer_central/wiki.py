@@ -50,5 +50,8 @@ def get_wiki_table(confluence_url, confluence_token):
             else:
                 last_valid_value = value
     
+    column_names = ('lab', 'storage', 'mac_path', 'windows_path', 'linux_path', 'group')
+    table.columns = column_names
+
     logger.debug(f"Found {len(table)} file share paths in the wiki")  
     return table, table_last_updated

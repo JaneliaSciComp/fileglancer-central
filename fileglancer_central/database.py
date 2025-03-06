@@ -13,11 +13,12 @@ class FileSharePathDB(Base):
     __tablename__ = 'file_share_paths'
     id = Column(Integer, primary_key=True, autoincrement=True)
     lab = Column(String)
-    group = Column(String, index=True)
+    group = Column(String)
     storage = Column(String)
+    canonical_path = Column(String, index=True, unique=True)
     mac_path = Column(String)
-    smb_path = Column(String)
-    linux_path = Column(String, index=True, unique=True)
+    windows_path = Column(String)
+    linux_path = Column(String)
     
 
 class LastRefreshDB(Base):
@@ -46,41 +47,47 @@ def get_last_refresh(session):
     return session.query(LastRefreshDB).first()
 
 
+def get_canonical_path(row):
+    """Get the canonical path from the row"""
+    return row['linux_path']
+
+
 def update_file_share_paths(session, table, table_last_updated, max_paths_to_delete=2):
     """Update database with new file share paths"""
     # Get all existing linux_paths from database
-    existing_paths = {path[0] for path in session.query(FileSharePathDB.linux_path).all()}
+    existing_paths = {path[0] for path in session.query(FileSharePathDB.canonical_path).all()}
     new_paths = set()
     num_existing = 0
     num_new = 0
 
     # Update or insert records
     for _, row in table.iterrows():
-        linux_path = row[table.columns[4]]
-        new_paths.add(linux_path)
+        canonical_path = get_canonical_path(row)
+        new_paths.add(canonical_path)
         
         # Check if path exists
-        existing_record = session.query(FileSharePathDB).filter_by(linux_path=linux_path).first()
+        existing_record = session.query(FileSharePathDB).filter_by(canonical_path=canonical_path).first()
         
-
         if existing_record:
             # Update existing record
-            existing_record.lab = row[table.columns[0]]
-            existing_record.storage = row[table.columns[1]]
-            existing_record.mac_path = row[table.columns[2]]
-            existing_record.smb_path = row[table.columns[3]]
-            existing_record.group = row[table.columns[5]]
+            existing_record.lab = row['lab']
+            existing_record.storage = row['storage'] 
+            existing_record.mac_path = row['mac_path']
+            existing_record.windows_path = row['windows_path']
+            existing_record.linux_path = row['linux_path']
+            existing_record.group = row['group']
             num_existing += 1
 
         else:
             # Create new record
             new_record = FileSharePathDB(
-                lab=row[table.columns[0]],
-                storage=row[table.columns[1]],
-                mac_path=row[table.columns[2]],
-                smb_path=row[table.columns[3]],
-                linux_path=linux_path,
-                group=row[table.columns[5]]
+                lab=row['lab'],
+                storage=row['storage'],
+                canonical_path=canonical_path,
+                mac_path=row['mac_path'],
+                windows_path=row['windows_path'],
+                linux_path=row['linux_path'],
+                group=row['group']
             )
             session.add(new_record)
             num_new += 1
