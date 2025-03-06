@@ -10,14 +10,14 @@ services:
           - ${DB_DIR}:/db:rw,shared
         environment:
           - DB_URL=${DB_URL}
+          - FGC_CONFLUENCE_TOKEN=${FGC_CONFLUENCE_TOKEN}
 
     nginx:
         image: nginx
         depends_on:
           - webapp
         ports:
-          - 80:80
-          - 443:443
+          - 7443:443
         restart: unless-stopped
         volumes:
           - $PWD/nginx.conf:/etc/nginx/conf.d/fileglancer-central.conf
