@@ -2,9 +2,9 @@ name: zarrcade
 services:
 
     webapp:
-        image: ghcr.io/janeliascicomp/fileglancer-central:latest
+        image: ghcr.io/janeliascicomp/fileglancer-central:0.0.1
         ports:
-          - 7878
+          - 8000
         restart: unless-stopped
         volumes:
           - ${DB_DIR}:/db:rw,shared
