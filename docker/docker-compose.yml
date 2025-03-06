@@ -20,7 +20,7 @@ services:
           - 7443:443
         restart: unless-stopped
         volumes:
-          - $PWD/nginx.conf:/etc/nginx/conf.d/fileglancer-central.conf
+          - ./nginx.conf:/etc/nginx/conf.d/fileglancer-central.conf
           - ${CERT_FILE}:/certs/default.crt
           - ${KEY_FILE}:/certs/default.key
 
