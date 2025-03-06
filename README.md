@@ -39,4 +39,22 @@ The Fileglancer Central service is a backend service optionally used by Fileglan
 ![Fileglancer Architecture drawio](https://github.com/user-attachments/assets/216353d2-082d-4292-a2eb-b72004087110)
 
 
+## Building the Docker container
+
+Run the Docker build on a Linux x86 system, replacing `<version>` with your version number:
+
+```bash
+cd docker/
+export VERSION=<version>
+docker build . --build-arg GIT_TAG=$VERSION -t ghcr.io/janeliascicomp/fileglancer-central:$VERSION
+```
+
+## Pushing the Docker container
+
+```bash
+docker push ghcr.io/janeliascicomp/fileglancer-central:$VERSION
+docker tag ghcr.io/janeliascicomp/fileglancer-central:$VERSION ghcr.io/janeliascicomp/fileglancer-central:latest
+docker push ghcr.io/janeliascicomp/fileglancer-central:latest
+```
+
 
