@@ -15,28 +15,34 @@ from datetime import datetime
 
 from contextlib import asynccontextmanager
 
+
 class FileSharePath(BaseModel):
     """A file share path from the database"""
     zone: str = Field(
         description="The zone of the file share, for grouping paths in the UI."
     )
-    group: Optional[str] = Field(
-        description="The group that owns the file share"
-    )
-    storage: Optional[str] = Field(
-        description="The storage type of the file share (home, primary, scratch, etc.)"
-    )
-    canonical_path: Optional[str] = Field(
+    canonical_path: str = Field(
         description="The canonical path to the file share, which uniquely identifies the file share."
     )
+    group: Optional[str] = Field(
+        description="The group that owns the file share",
+        default=None
+    )
+    storage: Optional[str] = Field(
+        description="The storage type of the file share (home, primary, scratch, etc.)",
+        default=None
+    )
     mac_path: Optional[str] = Field(
-        description="The path used to mount the file share on Mac (e.g. smb://server/share)"
+        description="The path used to mount the file share on Mac (e.g. smb://server/share)",
+        default=None
     )
     windows_path: Optional[str] = Field(
-        description="The path used to mount the file share on Windows (e.g. \\\\server\\share)"
+        description="The path used to mount the file share on Windows (e.g. \\\\server\\share)",
+        default=None
     )
     linux_path: Optional[str] = Field(
-        description="The path used to mount the file share on Linux (e.g. /unix/style/path)"
+        description="The path used to mount the file share on Linux (e.g. /unix/style/path)",
+        default=None
     )
 
 def create_app(settings):
