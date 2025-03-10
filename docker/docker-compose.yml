@@ -1,4 +1,4 @@
-name: zarrcade
+name: fileglancer-central
 services:
 
     webapp:
