@@ -1,0 +1,107 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
+    <head>
+        <title>Fileglancer</title>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+        <style type="text/css">
+            /*<![CDATA[*/
+            body {
+                background-color: #fff;
+                color: #000;
+                font-size: 0.9em;
+                font-family: sans-serif,helvetica;
+                max-width: 80em;
+                padding: 0 10px;
+                margin: 1em auto 1em;
+                position: relative;
+            }
+            h1 {
+                text-align: center;
+                margin: 0;
+                padding: 0.6em 2em 0.4em;
+                background-color: #303030;
+                color: #fff;
+                font-weight: normal;
+                font-size: 1.75em;
+            }
+            .banner {
+                text-align: center;
+                background-color: #571e12;
+                font-size: 1.3em;
+                font-weight: bold;
+                color: #fff;
+                margin-top: 1em;
+                padding: 0.6em;
+                border: 1px solid #000;
+            }
+            .banner :link,:visited,a:hover {
+                color: #fa785c;
+            }
+            h3 {
+                text-align: center;
+                background-color: #ddd;
+                font-size: 1.1em;
+                font-weight: bold;
+                color: #333;
+                margin: 0;
+                padding: 0.5em;
+                border-bottom: 2px solid #000;
+            }
+            .box {
+                margin-top: 1em;
+                border: 2px solid #000;
+            }
+            .content {
+                padding: 1em 5em;
+            }
+            /*]]>*/
+        </style>
+    </head>
+
+    <body>
+        <h1>Welcome to Fileglancer</h1>
+
+        <div>
+            <div class="banner">To start using Fileglancer<a href="/jupyter">login here</a> with your Janelia credentials (same as for the cluster)</div>
+
+            <div class="box">
+            <div class="content" style="font-size: 1.2em">
+
+            When you login into Fileglancer, you will be asked to choose one of the following job profiles for your JupyterLab instance:
+            <ul>
+            <li><b>Local server</b><br/>
+            You can start your Fileglancer instance on this server for free compute. This server has 128 cores and 500 GB of RAM, so feel free to use some threading or load a 20 GB image into memory -- just be reasonable about sharing the server.
+            </li>
+            <li><b>Cluster</b><br/>
+                There are several profiles which launch your Fileglancer instance on the compute cluster, with access to more computing power including GPUs. To use this mode, you must have access to the <a href="https://wikis.janelia.org/display/SCS/Janelia+Compute+Cluster">Janelia Compute Cluster</a> which can be requested through the <a href="mailto:support@hhmi.org">Help Desk</a>. If you would like to request a new cluster profile, contact Konrad Rokicki on Slack.
+            </li>
+            </ul>
+
+            <h4>Using Conda</h4>
+
+            If you have an existing <a href="https://conda.io">Conda</a> environment you'd like to use in a notebook, just make it available to Fileglancer like this:
+            <pre>
+    conda install ipykernel
+    python -m ipykernel install --user --name myenv --display-name "My Environment Name"
+            </pre>
+
+            <p>If you are using the "Local server" profile, you can create your own <tt>conda</tt> environment by using File->New->Terminal and then typing these commands (substituting your own environment names).
+            <pre>
+    eval "$(/usr/bin/conda shell.bash hook)"
+    /usr/bin/conda create --name myenv python=3.8 ipykernel
+    /usr/bin/conda activate myenv
+    python -m ipykernel install --user --name myenv --display-name "My Environment Name"
+            </pre>
+            Restart your kernel and you should now see your new conda environment when creating a new Notebook.
+
+            </div>
+            </div>
+
+            <p>
+                <center>Maintained by 
+                    <a href="https://wikis.janelia.org/display/SCSW/Scientific+Computing+Software">Scientific Computing Software</a></center>
+            </p>
+        </div>
+    </body>
+</html>
