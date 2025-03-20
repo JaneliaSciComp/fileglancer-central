@@ -2,7 +2,7 @@ name: fileglancer-central
 services:
 
     webapp:
-        image: ghcr.io/janeliascicomp/fileglancer-central:0.0.1
+        image: ghcr.io/janeliascicomp/fileglancer-central:0.0.2
         ports:
           - 8000
         restart: unless-stopped
