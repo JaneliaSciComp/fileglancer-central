@@ -26,6 +26,11 @@ To pull file share paths from Janelia's Confluence wiki, you need a Confluence t
 FGC_CONFLUENCE_TOKEN=your_confluence_token
 ```
 
+You should set the permissions on the `.env` file so that only the owner can read it:
+```
+chmod 600 .env
+```
+
 Run the development server:
 
 ```bash
