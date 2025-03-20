@@ -45,6 +45,11 @@ class FileSharePath(BaseModel):
         default=None
     )
 
+class FileSharePathResponse(BaseModel):
+    paths: List[FileSharePath] = Field(
+        description="A list of file share paths"
+    )
+
 def create_app(settings):
 
     app = FastAPI()
@@ -90,7 +95,7 @@ def create_app(settings):
         return RedirectResponse("/docs")
 
 
-    @app.get("/file-share-paths", response_model=List[FileSharePath], 
+    @app.get("/file-share-paths", response_model=FileSharePathResponse, 
              description="Get all file share paths from the database")
     async def get_file_share_paths(force_refresh: bool = False) -> List[FileSharePath]:
         session = get_db_session()
@@ -106,17 +111,17 @@ def create_app(settings):
                 logger.info("Wiki table has changed, refreshing file share paths...")
                 update_file_share_paths(session, table, table_last_updated)
 
-        paths = get_all_paths(session)
+        paths = [FileSharePath(
+                    zone=path.lab,
+                    group=path.group,
+                    storage=path.storage,
+                    canonical_path=path.canonical_path,
+                    mac_path=path.mac_path, 
+                    windows_path=path.windows_path,
+                    linux_path=path.linux_path,
+                ) for path in get_all_paths(session)]
         
-        return [FileSharePath(
-            zone=path.lab,
-            group=path.group,
-            storage=path.storage,
-            canonical_path=path.canonical_path,
-            mac_path=path.mac_path, 
-            windows_path=path.windows_path,
-            linux_path=path.linux_path,
-        ) for path in paths]
+        return FileSharePathResponse(paths=paths)
 
     return app
 
