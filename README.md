@@ -17,10 +17,18 @@ If this is your first time installing the extension in dev mode, install package
 pixi run dev-install
 ```
 
-> [!NOTE]
-> Currently, the file share paths are only pulled from Janelia's Confluence wiki. Future implementations will allow for other sources of file share paths.
+Then run the development server:
 
-To pull file share paths from Janelia's Confluence wiki, you need a Confluence token. Under the "User" menu in the upper right corner of the Confluence UI, click "Settings" and then "Personal Access Tokens". Click "Create token" and give it a name like "Fileglancer Central". Copy the token, then create a `.env` file in the repo root with the following content:
+```bash
+pixi run dev-launch
+```
+
+### Optional: configure file share path source
+
+> [!NOTE]
+> Currently, the file share paths are only pulled from a Confluence Wiki. Future implementations may allow for other sources of file share paths.
+
+To pull file share paths from Janelia's Confluence wiki, configure the `confluence_url` in the `config.yaml` file. You also need a Confluence token. Under the "User" menu in the upper right corner of the Confluence UI, click "Settings" and then "Personal Access Tokens". Click "Create token" and give it a name like "Fileglancer Central". Copy the token, then create a `.env` file in the repo root with the following content:
 
 ```
 FGC_CONFLUENCE_TOKEN=your_confluence_token
@@ -31,10 +39,16 @@ You should set the permissions on the `.env` file so that only the owner can rea
 chmod 600 .env
 ```
 
-Run the development server:
+### Optional: configure ticket system
 
-```bash
-pixi run dev-launch
+
+> [!NOTE]
+> Currently, tickets are handled using JIRA. Future implementations may allow for other sources of ticket management systems.
+
+Certain actions are handled using a ticket system so that they can be completed manually, such as complex file conversions. To configure JIRA, set the `jira_url` in the `config.yaml` and specify your token in the `.env` file as follows:
+
+```
+FGC_JIRA_TOKEN=your_jira_token
 ```
 
 ## Architecture

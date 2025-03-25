@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     db_url: str = 'sqlite:///fileglancer.db'
     confluence_url: HttpUrl = 'https://wikis.janelia.org'
     confluence_token: str
+    jira_url: HttpUrl = 'https://issues.hhmi.org/issues'
+    jira_token: str
 
     model_config = SettingsConfigDict(
         yaml_file="config.yaml",
