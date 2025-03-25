@@ -13,5 +13,8 @@ db_url: sqlite:///fileglancer.db
 #
 confluence_url: https://wikis.janelia.org 
 
-
+#
+# JIRA URL
+#
+jira_url: https://issues.hhmi.org/issues
 
