@@ -46,7 +46,7 @@ def create_jira_ticket(summary: str, description: str, project_key: str, issue_t
     # Create the issue
     new_issue = jira.issue_create(fields=issue_dict)
     logger.debug(f"JIRA ticket created: {new_issue['key']}")
-    return new_issue['key']
+    return new_issue
 
 
 def parse_datetime(datetime_str: str) -> datetime:
@@ -87,10 +87,8 @@ def get_jira_ticket_details(ticket_key: str) -> dict:
         'description': description,
         'link': f"{settings.jira_url}/browse/{ticket_key}",
         'comments': [{
-            'author': {
-                'name': c['author']['name'],
-                'displayName': c['author']['displayName']
-            },
+            'author_name': c['author']['name'],
+            'author_display_name': c['author']['displayName'],
             'body': c['body'],
             'created': parse_datetime(c['created']),
             'updated': parse_datetime(c['updated'])
@@ -117,14 +115,14 @@ def delete_jira_ticket(ticket_key: str):
 if __name__ == "__main__":
     # Example usage
     try:
-        ticket_key = create_jira_ticket(
+        ticket = create_jira_ticket(
             project_key="FT",
             issue_type="Service Request",
             summary="Test Ticket",
             description="This is a test ticket created via API *bold*\nnew line"
         )
-        ticket_details = get_jira_ticket_details(ticket_key)
-        delete_jira_ticket(ticket_key)
+        ticket_details = get_jira_ticket_details(ticket['key'])
+        delete_jira_ticket(ticket['key'])
 
         #delete_jira_ticket('2') # requests.exceptions.HTTPError: Issue Does Not Exist
 
