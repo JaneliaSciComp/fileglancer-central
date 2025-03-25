@@ -61,6 +61,18 @@ class TicketComment(BaseModel):
     body: str = Field(
         description="The body of the comment"
     )
+    
+class TicketComment(BaseModel):
+    """A comment on a ticket"""
+    author_name: str = Field(
+        description="The author of the comment"
+    )
+    author_display_name: str = Field(
+        description="The display name of the author"
+    )
+    body: str = Field(
+        description="The body of the comment"
+    )
     created: datetime = Field(
         description="The date and time the comment was created"
     )
@@ -208,6 +220,49 @@ def create_app(settings):
             return {"message": f"Ticket {ticket_key} deleted"}
         except Exception as e:
             if str(e) == "Issue Does Not Exist":
+                raise HTTPException(status_code=404, detail=str(e))
+            else:
+                raise HTTPException(status_code=500, detail=str(e))
+
+
+
+    @app.post("/ticket", response_model=str,
+              description="Create a new ticket and return the key")
+    async def create_ticket(
+        project_key: str,
+        issue_type: str,
+        summary: str,
+        description: str
+    ) -> str:
+        ticket = create_jira_ticket(
+            project_key=project_key,
+            issue_type=issue_type, 
+            summary=summary,
+            description=description
+        )
+        return ticket['key']
+
+
+    @app.get("/ticket/{ticket_key}", response_model=Ticket, 
+             description="Get a ticket by key")
+    async def get_ticket(ticket_key: str):
+        try:
+            return get_jira_ticket_details(ticket_key)
+        except Exception as e:
+            if e.message == "Issue Does Not Exist":
+                raise HTTPException(status_code=404, detail=str(e))
+            else:
+                raise HTTPException(status_code=500, detail=str(e))
+
+
+    @app.delete("/ticket/{ticket_key}",
+                description="Delete a ticket")
+    async def delete_ticket(ticket_key: str):
+        try:
+            delete_jira_ticket(ticket_key)
+            return {"message": f"Ticket {ticket_key} deleted"}
+        except Exception as e:
+            if e.message == "Issue Does Not Exist":
                 raise HTTPException(status_code=404, detail=str(e))
             else:
                 raise HTTPException(status_code=500, detail=str(e))
