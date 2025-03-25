@@ -1,19 +1,19 @@
 import sys
+from datetime import datetime
 from typing import List, Optional
 
 from loguru import logger
-from pydantic import BaseModel, Field
-from fastapi import FastAPI
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, JSONResponse
 from fastapi.exceptions import RequestValidationError, StarletteHTTPException
+from pydantic import BaseModel, Field, HttpUrl
 
 from fileglancer_central.settings import get_settings
 from fileglancer_central.database import get_db_session, get_all_paths, get_last_refresh, update_file_share_paths
 from fileglancer_central.wiki import get_wiki_table
-from datetime import datetime   
-
-from contextlib import asynccontextmanager
+from fileglancer_central.issues import create_jira_ticket, get_jira_ticket_details, delete_jira_ticket
 
 
 class FileSharePath(BaseModel):
@@ -49,6 +49,52 @@ class FileSharePathResponse(BaseModel):
     paths: List[FileSharePath] = Field(
         description="A list of file share paths"
     )
+    
+class TicketComment(BaseModel):
+    """A comment on a ticket"""
+    author_name: str = Field(
+        description="The author of the comment"
+    )
+    author_display_name: str = Field(
+        description="The display name of the author"
+    )
+    body: str = Field(
+        description="The body of the comment"
+    )
+    created: datetime = Field(
+        description="The date and time the comment was created"
+    )
+    updated: datetime = Field(
+        description="The date and time the comment was updated"
+    )
+
+class Ticket(BaseModel):
+    """A JIRA ticket"""
+    key: str = Field(
+        description="The key of the ticket"
+    )
+    created: datetime = Field(
+        description="The date and time the ticket was created"
+    )
+    updated: datetime = Field(
+        description="The date and time the ticket was updated"
+    )
+    status: str = Field(
+        description="The status of the ticket"
+    )
+    resolution: str = Field(
+        description="The resolution of the ticket"
+    )
+    description: str = Field(
+        description="The description of the ticket"
+    )
+    link: HttpUrl = Field(
+        description="The link to the ticket"
+    )
+    comments: List[TicketComment] = Field(
+        description="The comments on the ticket"
+    )
+    
 
 def create_app(settings):
 
@@ -122,6 +168,49 @@ def create_app(settings):
                 ) for path in get_all_paths(session)]
         
         return FileSharePathResponse(paths=paths)
+
+
+
+    @app.post("/ticket", response_model=str,
+              description="Create a new ticket and return the key")
+    async def create_ticket(
+        project_key: str,
+        issue_type: str,
+        summary: str,
+        description: str
+    ) -> str:
+        ticket = create_jira_ticket(
+            project_key=project_key,
+            issue_type=issue_type, 
+            summary=summary,
+            description=description
+        )
+        return ticket['key']
+
+
+    @app.get("/ticket/{ticket_key}", response_model=Ticket, 
+             description="Retrieve a ticket by its key")
+    async def get_ticket(ticket_key: str):
+        try:
+            return get_jira_ticket_details(ticket_key)
+        except Exception as e:
+            if str(e) == "Issue Does Not Exist":
+                raise HTTPException(status_code=404, detail=str(e))
+            else:
+                raise HTTPException(status_code=500, detail=str(e))
+
+
+    @app.delete("/ticket/{ticket_key}",
+                description="Delete a ticket by its key")
+    async def delete_ticket(ticket_key: str):
+        try:
+            delete_jira_ticket(ticket_key)
+            return {"message": f"Ticket {ticket_key} deleted"}
+        except Exception as e:
+            if str(e) == "Issue Does Not Exist":
+                raise HTTPException(status_code=404, detail=str(e))
+            else:
+                raise HTTPException(status_code=500, detail=str(e))
 
     return app
 
