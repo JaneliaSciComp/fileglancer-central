@@ -28,10 +28,10 @@ class Settings(BaseSettings):
 
     log_level: str = 'DEBUG'
     db_url: str = 'sqlite:///fileglancer.db'
-    confluence_url: HttpUrl = 'https://wikis.janelia.org'
-    confluence_token: str
-    jira_url: HttpUrl = 'https://issues.hhmi.org/issues'
-    jira_token: str
+    confluence_url: Optional[HttpUrl] = None
+    confluence_token: Optional[str] = None
+    jira_url: Optional[HttpUrl] = None
+    jira_token: Optional[str] = None
 
     model_config = SettingsConfigDict(
         yaml_file="config.yaml",
