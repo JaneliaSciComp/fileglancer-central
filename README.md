@@ -41,9 +41,6 @@ chmod 600 .env
 
 ### Optional: configure ticket system
 
-
-### Optional: configure ticket system
-
 > [!NOTE]
 > Currently, tickets are handled using JIRA. Future implementations may allow for other sources of ticket management systems.
 
