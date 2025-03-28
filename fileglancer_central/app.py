@@ -279,49 +279,36 @@ def create_app(settings):
     @app.get("/preferences/{username}", response_model=Dict[str, Dict],
              description="Get all preferences for a user")
     async def get_preferences(username: str):
-        session = get_db_session()
-        try:
+        with get_db_session() as session:
             return get_all_user_preferences(session, username)
-        finally:
-            session.close()
 
 
     @app.get("/preferences/{username}/{key}", response_model=Optional[Dict],
              description="Get a specific preference for a user")
     async def get_preference(username: str, key: str):
-        session = get_db_session()
-        try:
+        with get_db_session() as session:
             pref = get_user_preference(session, username, key)
             if pref is None:
                 raise HTTPException(status_code=404, detail="Preference not found")
             return pref
-        finally:
-            session.close()
 
 
     @app.put("/preferences/{username}/{key}",
              description="Set a preference for a user")
     async def set_preference(username: str, key: str, value: Dict):
-        session = get_db_session()
-        try:
+        with get_db_session() as session:
             set_user_preference(session, username, key, value)
             return {"message": f"Preference {key} set for user {username}"}
-        finally:
-            session.close()
 
 
     @app.delete("/preferences/{username}/{key}",
                 description="Delete a preference for a user")
     async def delete_preference(username: str, key: str):
-        session = get_db_session()
-        try:
-            delete_user_preference(session, username, key)
+        with get_db_session() as session:
+            deleted = delete_user_preference(session, username, key)
+            if not deleted:
+                raise HTTPException(status_code=404, detail="Preference not found")
             return {"message": f"Preference {key} deleted for user {username}"}
-        finally:
-            session.close()
-
-
-
 
 
     return app

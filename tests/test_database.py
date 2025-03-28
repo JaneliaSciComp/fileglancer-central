@@ -102,7 +102,7 @@ def test_user_preferences(db_session):
     all_prefs = get_all_user_preferences(db_session, "testuser")
     assert len(all_prefs) == 1
     assert all_prefs["test_key"] == new_value
-    
+
     # Test deleting preference
     delete_user_preference(db_session, "testuser", "test_key")
     pref = get_user_preference(db_session, "testuser", "test_key")

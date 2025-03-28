@@ -11,6 +11,7 @@ from typing import Optional, Dict
 Base = declarative_base()
 
 class FileSharePathDB(Base):
+    """Database model for storing file share paths"""
     __tablename__ = 'file_share_paths'
     id = Column(Integer, primary_key=True, autoincrement=True)
     lab = Column(String)
@@ -23,10 +24,25 @@ class FileSharePathDB(Base):
     
 
 class LastRefreshDB(Base):
+    """Database model for storing the last refresh time of the file share paths"""
     __tablename__ = 'last_refresh'
     id = Column(Integer, primary_key=True, autoincrement=True)
     source_last_updated = Column(DateTime, nullable=False)
     db_last_updated = Column(DateTime, nullable=False)
+
+
+class UserPreferenceDB(Base):
+    """Database model for storing user preferences"""
+    __tablename__ = 'user_preferences'
+
+    id = Column(Integer, primary_key=True)
+    username = Column(String, nullable=False)
+    key = Column(String, nullable=False) 
+    value = Column(JSON, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint('username', 'key', name='uq_user_pref'),
+    )
 
 
 def get_db_session():
@@ -111,20 +127,6 @@ def update_file_share_paths(session, table, table_last_updated, max_paths_to_del
     session.commit()
 
 
-class UserPreferenceDB(Base):
-    """Database model for storing user preferences"""
-    __tablename__ = 'user_preferences'
-
-    id = Column(Integer, primary_key=True)
-    username = Column(String, nullable=False)
-    key = Column(String, nullable=False) 
-    value = Column(JSON, nullable=False)
-
-    __table_args__ = (
-        UniqueConstraint('username', 'key', name='uq_user_pref'),
-    )
-
-
 def get_user_preference(session: Session, username: str, key: str) -> Optional[Dict]:
     """Get a user preference value by username and key"""
     pref = session.query(UserPreferenceDB).filter_by(
@@ -135,7 +137,11 @@ def get_user_preference(session: Session, username: str, key: str) -> Optional[D
 
 
 def set_user_preference(session: Session, username: str, key: str, value: Dict):
-    """Set a user preference value"""
+    """Set a user preference value
+    If the preference already exists, it will be updated with the new value.
+    If the preference does not exist, it will be created.
+    Returns the preference object.    
+    """
     pref = session.query(UserPreferenceDB).filter_by(
         username=username, 
         key=key
@@ -152,15 +158,17 @@ def set_user_preference(session: Session, username: str, key: str, value: Dict):
         session.add(pref)
 
     session.commit()
+    return pref
 
 
-def delete_user_preference(session: Session, username: str, key: str):
-    """Delete a user preference"""
-    session.query(UserPreferenceDB).filter_by(
+def delete_user_preference(session: Session, username: str, key: str) -> bool:
+    """Delete a user preference and return True if it was deleted, False if it didn't exist"""
+    deleted = session.query(UserPreferenceDB).filter_by(
         username=username,
         key=key
     ).delete()
     session.commit()
+    return deleted > 0
 
 
 def get_all_user_preferences(session: Session, username: str) -> Dict[str, Dict]:
