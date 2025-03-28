@@ -57,6 +57,12 @@ The Fileglancer Central service is a backend service optionally used by Fileglan
 ![Fileglancer Architecture drawio](https://github.com/user-attachments/assets/216353d2-082d-4292-a2eb-b72004087110)
 
 
+## Running unit tests
+
+```bash
+pixi run -e test pytest
+```
+
 ## Building the Docker container
 
 Run the Docker build on a Linux x86 system, replacing `<version>` with your version number:
