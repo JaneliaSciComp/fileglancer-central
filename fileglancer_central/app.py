@@ -280,14 +280,14 @@ def create_app(settings):
                 raise HTTPException(status_code=500, detail=str(e))
 
 
-    @app.get("/preferences/{username}", response_model=Dict[str, Dict],
+    @app.get("/preference/{username}", response_model=Dict[str, Dict],
              description="Get all preferences for a user")
     async def get_preferences(username: str):
         with get_db_session() as session:
             return get_all_user_preferences(session, username)
 
 
-    @app.get("/preferences/{username}/{key}", response_model=Optional[Dict],
+    @app.get("/preference/{username}/{key}", response_model=Optional[Dict],
              description="Get a specific preference for a user")
     async def get_preference(username: str, key: str):
         with get_db_session() as session:
@@ -297,7 +297,7 @@ def create_app(settings):
             return pref
 
 
-    @app.put("/preferences/{username}/{key}",
+    @app.put("/preference/{username}/{key}",
              description="Set a preference for a user")
     async def set_preference(username: str, key: str, value: Dict):
         with get_db_session() as session:
@@ -305,7 +305,7 @@ def create_app(settings):
             return {"message": f"Preference {key} set for user {username}"}
 
 
-    @app.delete("/preferences/{username}/{key}",
+    @app.delete("/preference/{username}/{key}",
                 description="Delete a preference for a user")
     async def delete_preference(username: str, key: str):
         with get_db_session() as session:
