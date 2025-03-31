@@ -1,23 +1,25 @@
-
-from fileglancer_central.settings import get_settings
-from loguru import logger
-settings = get_settings()
+import re
+from datetime import datetime
 
 from sqlalchemy import create_engine, Column, String, Integer, DateTime, JSON, UniqueConstraint
 from sqlalchemy.orm import sessionmaker, declarative_base, Session
-from datetime import datetime
 from typing import Optional, Dict
+from loguru import logger
 
+from fileglancer_central.settings import get_settings
+
+settings = get_settings()
 Base = declarative_base()
 
 class FileSharePathDB(Base):
     """Database model for storing file share paths"""
     __tablename__ = 'file_share_paths'
     id = Column(Integer, primary_key=True, autoincrement=True)
-    lab = Column(String)
+    name = Column(String, index=True, unique=True)
+    zone = Column(String)
     group = Column(String)
     storage = Column(String)
-    canonical_path = Column(String, index=True, unique=True)
+    mount_path = Column(String)
     mac_path = Column(String)
     windows_path = Column(String)
     linux_path = Column(String)
@@ -64,47 +66,57 @@ def get_last_refresh(session):
     return session.query(LastRefreshDB).first()
 
 
-def get_canonical_path(row):
-    """Get the canonical path from the row"""
-    return row['linux_path']
+def slugify_path(s):
+    """Slugify a path to make it into a name"""
+    # Replace any special characters with underscores
+    s = re.sub(r'[^a-zA-Z0-9]', '_', s)
+    # Replace multiple underscores with a single underscore
+    s = re.sub(r'_+', '_', s)
+    # Remove leading underscores
+    s = s.lstrip('_')
+    return s
 
 
 def update_file_share_paths(session, table, table_last_updated, max_paths_to_delete=2):
     """Update database with new file share paths"""
     # Get all existing linux_paths from database
-    existing_paths = {path[0] for path in session.query(FileSharePathDB.canonical_path).all()}
+    existing_paths = {path[0] for path in session.query(FileSharePathDB.mount_path).all()}
     new_paths = set()
     num_existing = 0
     num_new = 0
 
     # Update or insert records
     for _, row in table.iterrows():
-        canonical_path = get_canonical_path(row)
-        new_paths.add(canonical_path)
+        mount_path = row['linux_path']
+        new_paths.add(mount_path)
         
         # Check if path exists
-        existing_record = session.query(FileSharePathDB).filter_by(canonical_path=canonical_path).first()
+        existing_record = session.query(FileSharePathDB).filter_by(mount_path=mount_path).first()
         
         if existing_record:
             # Update existing record
-            existing_record.lab = row['lab']
-            existing_record.storage = row['storage'] 
+            existing_record.name = slugify_path(row['linux_path'])
+            existing_record.zone = row['lab']
+            existing_record.group = row['group']
+            existing_record.storage = row['storage']
+            existing_record.mount_path = row['linux_path']
             existing_record.mac_path = row['mac_path']
             existing_record.windows_path = row['windows_path']
             existing_record.linux_path = row['linux_path']
-            existing_record.group = row['group']
+            
             num_existing += 1
 
         else:
             # Create new record
             new_record = FileSharePathDB(
-                lab=row['lab'],
+                name=slugify_path(row['linux_path']),
+                zone=row['lab'],
+                group=row['group'],
                 storage=row['storage'],
-                canonical_path=canonical_path,
+                mount_path=row['linux_path'],
                 mac_path=row['mac_path'],
                 windows_path=row['windows_path'],
-                linux_path=row['linux_path'],
-                group=row['group']
+                linux_path=row['linux_path']
             )
             session.add(new_record)
             num_new += 1

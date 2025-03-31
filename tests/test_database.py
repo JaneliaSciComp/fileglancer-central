@@ -53,8 +53,8 @@ def test_file_share_paths(db_session):
     # Test get_all_paths
     paths = get_all_paths(db_session)
     assert len(paths) == 2
-    assert paths[0].lab == 'lab1'
-    assert paths[1].lab == 'lab2'
+    assert paths[0].zone == 'lab1'
+    assert paths[1].zone == 'lab2'
 
     # Test updating existing paths
     data['lab'] = ['lab1_updated', 'lab2_updated']
@@ -62,8 +62,8 @@ def test_file_share_paths(db_session):
     update_file_share_paths(db_session, df, datetime.now())
     
     paths = get_all_paths(db_session)
-    assert paths[0].lab == 'lab1_updated'
-    assert paths[1].lab == 'lab2_updated'
+    assert paths[0].zone == 'lab1_updated'
+    assert paths[1].zone == 'lab2_updated'
 
 
 def test_last_refresh(db_session):

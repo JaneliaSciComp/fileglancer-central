@@ -18,11 +18,11 @@ from fileglancer_central.issues import create_jira_ticket, get_jira_ticket_detai
 
 class FileSharePath(BaseModel):
     """A file share path from the database"""
+    name: str = Field(
+        description="The name of the file share, which uniquely identifies the file share."
+    )
     zone: str = Field(
         description="The zone of the file share, for grouping paths in the UI."
-    )
-    canonical_path: str = Field(
-        description="The canonical path to the file share, which uniquely identifies the file share."
     )
     group: Optional[str] = Field(
         description="The group that owns the file share",
@@ -31,6 +31,9 @@ class FileSharePath(BaseModel):
     storage: Optional[str] = Field(
         description="The storage type of the file share (home, primary, scratch, etc.)",
         default=None
+    )
+    mount_path: str = Field(
+        description="The path where the file share is mounted on the local machine"
     )
     mac_path: Optional[str] = Field(
         description="The path used to mount the file share on Mac (e.g. smb://server/share)",
@@ -182,10 +185,11 @@ def create_app(settings):
                     update_file_share_paths(session, table, table_last_updated)
 
             paths = [FileSharePath(
-                        zone=path.lab,
+                        name=path.name,
+                        zone=path.zone,
                         group=path.group,
                         storage=path.storage,
-                        canonical_path=path.canonical_path,
+                        mount_path=path.mount_path,
                         mac_path=path.mac_path, 
                         windows_path=path.windows_path,
                         linux_path=path.linux_path,
