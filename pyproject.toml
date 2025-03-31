@@ -27,6 +27,7 @@ classifiers = [
 test = [
     "pytest",
     "pytest-cov",
+    "httpx"
 ]
 
 [tool.setuptools.packages.find]
