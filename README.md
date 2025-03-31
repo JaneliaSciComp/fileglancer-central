@@ -11,7 +11,13 @@ git clone git@github.com:JaneliaSciComp/fileglancer-central.git
 cd fileglancer-central
 ```
 
-If this is your first time installing the extension in dev mode, install package in development mode.
+Copy the config template and edit it to your liking:
+
+```bash
+cp config.yaml.template config.yaml
+```
+
+Install package in development mode:
 
 ```bash
 pixi run dev-install
@@ -56,6 +62,12 @@ The Fileglancer Central service is a backend service optionally used by Fileglan
 
 ![Fileglancer Architecture drawio](https://github.com/user-attachments/assets/216353d2-082d-4292-a2eb-b72004087110)
 
+
+## Running unit tests
+
+```bash
+pixi run -e test pytest
+```
 
 ## Building the Docker container
 

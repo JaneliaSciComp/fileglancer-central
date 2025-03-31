@@ -1,6 +1,6 @@
 import sys
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 from loguru import logger
 from contextlib import asynccontextmanager
@@ -11,7 +11,7 @@ from fastapi.exceptions import RequestValidationError, StarletteHTTPException
 from pydantic import BaseModel, Field, HttpUrl
 
 from fileglancer_central.settings import get_settings
-from fileglancer_central.database import get_db_session, get_all_paths, get_last_refresh, update_file_share_paths
+from fileglancer_central.database import get_db_session, get_all_paths, get_last_refresh, update_file_share_paths, get_user_preference, set_user_preference, delete_user_preference, get_all_user_preferences
 from fileglancer_central.wiki import get_wiki_table
 from fileglancer_central.issues import create_jira_ticket, get_jira_ticket_details, delete_jira_ticket
 
@@ -108,6 +108,15 @@ class Ticket(BaseModel):
     )
     
 
+class UserPreference(BaseModel):
+    """A user preference"""
+    key: str = Field(
+        description="The key of the preference"
+    )
+    value: Dict = Field(
+        description="The value of the preference"
+    )
+
 def create_app(settings):
 
     app = FastAPI()
@@ -156,29 +165,32 @@ def create_app(settings):
     @app.get("/file-share-paths", response_model=FileSharePathResponse, 
              description="Get all file share paths from the database")
     async def get_file_share_paths(force_refresh: bool = False) -> List[FileSharePath]:
-        session = get_db_session()
+        with get_db_session() as session:
+            last_refresh = get_last_refresh(session)
+            if not last_refresh or (datetime.now() - last_refresh.db_last_updated).days >= 1 or force_refresh:
+                logger.info("Last refresh was more than a day ago, checking for updates...")
+                confluence_url = app.settings.confluence_url
+                confluence_token = app.settings.confluence_token
+                if not confluence_url or not confluence_token:
+                    logger.error("You must configure `confluence_url` and `confluence_token` in the config.yaml file")
+                    raise HTTPException(status_code=500, detail="Confluence is not configured")
+                
+                table, table_last_updated = get_wiki_table(confluence_url, confluence_token)
 
-        last_refresh = get_last_refresh(session)
-        if not last_refresh or (datetime.now() - last_refresh.db_last_updated).days >= 1 or force_refresh:
-            logger.info("Last refresh was more than a day ago, checking for updates...")
-            confluence_url = app.settings.confluence_url
-            confluence_token = app.settings.confluence_token
-            table, table_last_updated = get_wiki_table(confluence_url, confluence_token)
+                if not last_refresh or table_last_updated != last_refresh.source_last_updated:
+                    logger.info("Wiki table has changed, refreshing file share paths...")
+                    update_file_share_paths(session, table, table_last_updated)
 
-            if not last_refresh or table_last_updated != last_refresh.source_last_updated:
-                logger.info("Wiki table has changed, refreshing file share paths...")
-                update_file_share_paths(session, table, table_last_updated)
+            paths = [FileSharePath(
+                        zone=path.lab,
+                        group=path.group,
+                        storage=path.storage,
+                        canonical_path=path.canonical_path,
+                        mac_path=path.mac_path, 
+                        windows_path=path.windows_path,
+                        linux_path=path.linux_path,
+                    ) for path in get_all_paths(session)]
 
-        paths = [FileSharePath(
-                    zone=path.lab,
-                    group=path.group,
-                    storage=path.storage,
-                    canonical_path=path.canonical_path,
-                    mac_path=path.mac_path, 
-                    windows_path=path.windows_path,
-                    linux_path=path.linux_path,
-                ) for path in get_all_paths(session)]
-        
         return FileSharePathResponse(paths=paths)
 
 
@@ -266,6 +278,42 @@ def create_app(settings):
                 raise HTTPException(status_code=404, detail=str(e))
             else:
                 raise HTTPException(status_code=500, detail=str(e))
+
+
+    @app.get("/preferences/{username}", response_model=Dict[str, Dict],
+             description="Get all preferences for a user")
+    async def get_preferences(username: str):
+        with get_db_session() as session:
+            return get_all_user_preferences(session, username)
+
+
+    @app.get("/preferences/{username}/{key}", response_model=Optional[Dict],
+             description="Get a specific preference for a user")
+    async def get_preference(username: str, key: str):
+        with get_db_session() as session:
+            pref = get_user_preference(session, username, key)
+            if pref is None:
+                raise HTTPException(status_code=404, detail="Preference not found")
+            return pref
+
+
+    @app.put("/preferences/{username}/{key}",
+             description="Set a preference for a user")
+    async def set_preference(username: str, key: str, value: Dict):
+        with get_db_session() as session:
+            set_user_preference(session, username, key, value)
+            return {"message": f"Preference {key} set for user {username}"}
+
+
+    @app.delete("/preferences/{username}/{key}",
+                description="Delete a preference for a user")
+    async def delete_preference(username: str, key: str):
+        with get_db_session() as session:
+            deleted = delete_user_preference(session, username, key)
+            if not deleted:
+                raise HTTPException(status_code=404, detail="Preference not found")
+            return {"message": f"Preference {key} deleted for user {username}"}
+
 
     return app
 

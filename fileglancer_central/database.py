@@ -3,13 +3,15 @@ from fileglancer_central.settings import get_settings
 from loguru import logger
 settings = get_settings()
 
-from sqlalchemy import create_engine, Column, String, Integer, DateTime
-from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy import create_engine, Column, String, Integer, DateTime, JSON, UniqueConstraint
+from sqlalchemy.orm import sessionmaker, declarative_base, Session
 from datetime import datetime
+from typing import Optional, Dict
 
 Base = declarative_base()
 
 class FileSharePathDB(Base):
+    """Database model for storing file share paths"""
     __tablename__ = 'file_share_paths'
     id = Column(Integer, primary_key=True, autoincrement=True)
     lab = Column(String)
@@ -22,10 +24,25 @@ class FileSharePathDB(Base):
     
 
 class LastRefreshDB(Base):
+    """Database model for storing the last refresh time of the file share paths"""
     __tablename__ = 'last_refresh'
     id = Column(Integer, primary_key=True, autoincrement=True)
     source_last_updated = Column(DateTime, nullable=False)
     db_last_updated = Column(DateTime, nullable=False)
+
+
+class UserPreferenceDB(Base):
+    """Database model for storing user preferences"""
+    __tablename__ = 'user_preferences'
+
+    id = Column(Integer, primary_key=True)
+    username = Column(String, nullable=False)
+    key = Column(String, nullable=False) 
+    value = Column(JSON, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint('username', 'key', name='uq_user_pref'),
+    )
 
 
 def get_db_session():
@@ -108,3 +125,69 @@ def update_file_share_paths(session, table, table_last_updated, max_paths_to_del
     session.add(LastRefreshDB(source_last_updated=table_last_updated, db_last_updated=datetime.now()))
 
     session.commit()
+
+
+def get_user_preference(session: Session, username: str, key: str) -> Optional[Dict]:
+    """Get a user preference value by username and key"""
+    pref = session.query(UserPreferenceDB).filter_by(
+        username=username,
+        key=key
+    ).first()
+    return pref.value if pref else None
+
+
+def set_user_preference(session: Session, username: str, key: str, value: Dict):
+    """Set a user preference value
+    If the preference already exists, it will be updated with the new value.
+    If the preference does not exist, it will be created.
+    Returns the preference object.    
+    """
+    pref = session.query(UserPreferenceDB).filter_by(
+        username=username, 
+        key=key
+    ).first()
+
+    if pref:
+        pref.value = value
+    else:
+        pref = UserPreferenceDB(
+            username=username,
+            key=key,
+            value=value
+        )
+        session.add(pref)
+
+    session.commit()
+    return pref
+
+
+def delete_user_preference(session: Session, username: str, key: str) -> bool:
+    """Delete a user preference and return True if it was deleted, False if it didn't exist"""
+    deleted = session.query(UserPreferenceDB).filter_by(
+        username=username,
+        key=key
+    ).delete()
+    session.commit()
+    return deleted > 0
+
+
+def get_all_user_preferences(session: Session, username: str) -> Dict[str, Dict]:
+    """Get all preferences for a user"""
+    prefs = session.query(UserPreferenceDB).filter_by(username=username).all()
+    return {pref.key: pref.value for pref in prefs}
+
+
+# Test harness
+if __name__ == "__main__":
+    session = get_db_session()
+    value = {"a": 1, "b": [1, 2, 3]}
+    set_user_preference(session, "tester", "favorite_color", "blue")
+    set_user_preference(session, "tester", "test_key", value)
+    print(get_all_user_preferences(session, "tester"))
+    assert get_user_preference(session, "tester", "favorite_color") == "blue"
+    assert get_user_preference(session, "tester", "test_key") == value
+    delete_user_preference(session, "tester", "test_key")
+    delete_user_preference(session, "tester", "favorite_color") 
+    print(get_all_user_preferences(session, "tester"))
+    assert get_user_preference(session, "tester", "test_key") is None
+    assert get_user_preference(session, "tester", "favorite_color") is None
