@@ -171,6 +171,10 @@ def create_app(settings):
                 logger.info("Last refresh was more than a day ago, checking for updates...")
                 confluence_url = app.settings.confluence_url
                 confluence_token = app.settings.confluence_token
+                if not confluence_url or not confluence_token:
+                    logger.error("You must configure `confluence_url` and `confluence_token` in the config.yaml file")
+                    raise HTTPException(status_code=500, detail="Confluence is not configured")
+                
                 table, table_last_updated = get_wiki_table(confluence_url, confluence_token)
 
                 if not last_refresh or table_last_updated != last_refresh.source_last_updated:
