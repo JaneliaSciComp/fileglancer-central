@@ -36,7 +36,7 @@ def test_docs_redirect(test_client):
 
 def test_get_preferences(test_client):
     """Test getting user preferences"""
-    response = test_client.get("/preferences/testuser")
+    response = test_client.get("/preference/testuser")
     assert response.status_code == 200
     value = response.json()
     assert isinstance(value, dict)
@@ -45,25 +45,25 @@ def test_get_preferences(test_client):
 
 def test_get_specific_preference(test_client):
     """Test getting specific user preference"""
-    response = test_client.get("/preferences/testuser/unknown_key")
+    response = test_client.get("/preference/testuser/unknown_key")
     assert response.status_code == 404
 
 
 def test_set_preference(test_client):
     """Test setting user preference"""
     pref_data = {"test": "value"}
-    response = test_client.put("/preferences/testuser/test_key", json=pref_data)
+    response = test_client.put("/preference/testuser/test_key", json=pref_data)
     assert response.status_code == 200
 
-    response = test_client.get("/preferences/testuser/test_key")
+    response = test_client.get("/preference/testuser/test_key")
     assert response.status_code == 200
     assert response.json() == pref_data
 
 
 def test_delete_preference(test_client):
     """Test deleting user preference"""
-    response = test_client.delete("/preferences/testuser/test_key")
+    response = test_client.delete("/preference/testuser/test_key")
     assert response.status_code == 200
 
-    response = test_client.delete("/preferences/testuser/unknown_key")
+    response = test_client.delete("/preference/testuser/unknown_key")
     assert response.status_code == 404
