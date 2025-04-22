@@ -19,7 +19,7 @@ RUN pixi install --locked -e default \
     && chmod +x /app/entrypoint.sh
 
 FROM ubuntu:24.04 AS production
-LABEL org.opencontainers.image.source = "https://github.com/JaneliaSciComp/fileglancer-central"
+LABEL org.opencontainers.image.source="https://github.com/JaneliaSciComp/fileglancer-central"
 
 ENV HOST=0.0.0.0
 ENV PORT=8000
