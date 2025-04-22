@@ -154,6 +154,12 @@ def create_app(settings):
         logger.remove()
         logger.add(sys.stderr, level=app.settings.log_level)
 
+        logger.info(f"Settings:")
+        logger.info(f"  log_level: {app.settings.log_level}")
+        logger.info(f"  db_url: {app.settings.db_url}")
+        logger.info(f"  confluence_url: {app.settings.confluence_url}")
+        logger.info(f"  jira_url: {app.settings.jira_url}")
+        
         logger.info(f"Server ready")
         yield
         # Cleanup (if needed)
