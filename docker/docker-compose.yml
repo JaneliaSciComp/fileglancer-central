@@ -2,7 +2,7 @@ name: fileglancer
 services:
 
     fileglancer-central:
-        image: ghcr.io/janeliascicomp/fileglancer-central:0.1.0
+        image: ghcr.io/janeliascicomp/fileglancer-central:0.1.1
         restart: unless-stopped
         volumes:
           - ${DB_DIR}:/db:rw,shared
