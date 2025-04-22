@@ -6,6 +6,8 @@ services:
         restart: unless-stopped
         volumes:
           - ${DB_DIR}:/db:rw,shared
+        ports:
+          - 8989:8000
         environment:
           - DB_URL=${DB_URL}
           - FGC_CONFLUENCE_TOKEN=${FGC_CONFLUENCE_TOKEN}
