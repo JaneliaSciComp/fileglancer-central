@@ -9,8 +9,9 @@ services:
         ports:
           - 8989:8000
         environment:
-          - DB_URL=${DB_URL}
+          - ${CONFIG_FILE}:/app/fileglancer-central/config.yaml
           - FGC_CONFLUENCE_TOKEN=${FGC_CONFLUENCE_TOKEN}
+          - FGC_JIRA_TOKEN=${FGC_JIRA_TOKEN}
 
     nginx:
         image: nginx
