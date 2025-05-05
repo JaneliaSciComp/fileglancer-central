@@ -12,6 +12,7 @@ from fileglancer_central.database import (
     get_user_preference, set_user_preference, delete_user_preference,
     get_all_user_preferences, Base
 )
+from fileglancer_central.wiki import convert_table_to_file_share_paths
 
 @pytest.fixture
 def db_session():
@@ -48,7 +49,8 @@ def test_file_share_paths(db_session):
     df = pd.DataFrame(data)
     
     # Test update_file_share_paths
-    update_file_share_paths(db_session, df, datetime.now())
+    paths = convert_table_to_file_share_paths(df)
+    update_file_share_paths(db_session, paths, datetime.now())
     
     # Test get_all_paths
     paths = get_all_paths(db_session)
@@ -59,7 +61,8 @@ def test_file_share_paths(db_session):
     # Test updating existing paths
     data['lab'] = ['lab1_updated', 'lab2_updated']
     df = pd.DataFrame(data)
-    update_file_share_paths(db_session, df, datetime.now())
+    paths = convert_table_to_file_share_paths(df)
+    update_file_share_paths(db_session, paths, datetime.now())
     
     paths = get_all_paths(db_session)
     assert paths[0].zone == 'lab1_updated'
@@ -72,11 +75,43 @@ def test_last_refresh(db_session):
             'linux_path': ['/path1'], 'mac_path': ['mac1'], 'windows_path': ['win1']}
     df = pd.DataFrame(data)
     
-    update_file_share_paths(db_session, df, now)
+    paths = convert_table_to_file_share_paths(df)
+    update_file_share_paths(db_session, paths, now)
     
     refresh = get_last_refresh(db_session)
     assert refresh is not None
     assert refresh.source_last_updated == now
+
+
+def test_max_paths_to_delete(db_session):
+    # Create initial data
+    data = {
+        'lab': ['lab1', 'lab2', 'lab3'],
+        'group': ['group1', 'group2', 'group3'],
+        'storage': ['storage1', 'storage2', 'storage3'],
+        'linux_path': ['/path1', '/path2', '/path3'],
+        'mac_path': ['mac1', 'mac2', 'mac3'],
+        'windows_path': ['win1', 'win2', 'win3']
+    }
+    df = pd.DataFrame(data)
+    paths = convert_table_to_file_share_paths(df)
+    update_file_share_paths(db_session, paths, datetime.now())
+    
+    # Update with fewer paths (should trigger deletion limit)
+    data = {
+        'lab': ['lab1'],
+        'group': ['group1'],
+        'storage': ['storage1'],
+        'linux_path': ['/path1'],
+        'mac_path': ['mac1'],
+        'windows_path': ['win1']
+    }
+    df = pd.DataFrame(data)
+    paths = convert_table_to_file_share_paths(df)
+    # With max_paths_to_delete=1, should not delete paths
+    update_file_share_paths(db_session, paths, datetime.now(), max_paths_to_delete=1)
+    paths = get_all_paths(db_session)
+    assert len(paths) == 3  # Should still have all paths
 
 
 def test_user_preferences(db_session):
@@ -107,33 +142,3 @@ def test_user_preferences(db_session):
     delete_user_preference(db_session, "testuser", "test_key")
     pref = get_user_preference(db_session, "testuser", "test_key")
     assert pref is None
-
-
-def test_max_paths_to_delete(db_session):
-    # Create initial data
-    data = {
-        'lab': ['lab1', 'lab2', 'lab3'],
-        'group': ['group1', 'group2', 'group3'],
-        'storage': ['storage1', 'storage2', 'storage3'],
-        'linux_path': ['/path1', '/path2', '/path3'],
-        'mac_path': ['mac1', 'mac2', 'mac3'],
-        'windows_path': ['win1', 'win2', 'win3']
-    }
-    df = pd.DataFrame(data)
-    update_file_share_paths(db_session, df, datetime.now())
-    
-    # Update with fewer paths (should trigger deletion limit)
-    data = {
-        'lab': ['lab1'],
-        'group': ['group1'],
-        'storage': ['storage1'],
-        'linux_path': ['/path1'],
-        'mac_path': ['mac1'],
-        'windows_path': ['win1']
-    }
-    df = pd.DataFrame(data)
-    
-    # With max_paths_to_delete=1, should not delete paths
-    update_file_share_paths(db_session, df, datetime.now(), max_paths_to_delete=1)
-    paths = get_all_paths(db_session)
-    assert len(paths) == 3  # Should still have all paths

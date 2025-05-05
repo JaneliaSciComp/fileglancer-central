@@ -1,4 +1,3 @@
-import re
 from datetime import datetime
 
 from sqlalchemy import create_engine, Column, String, Integer, DateTime, JSON, UniqueConstraint
@@ -66,18 +65,7 @@ def get_last_refresh(session):
     return session.query(LastRefreshDB).first()
 
 
-def slugify_path(s):
-    """Slugify a path to make it into a name"""
-    # Replace any special characters with underscores
-    s = re.sub(r'[^a-zA-Z0-9]', '_', s)
-    # Replace multiple underscores with a single underscore
-    s = re.sub(r'_+', '_', s)
-    # Remove leading underscores
-    s = s.lstrip('_')
-    return s
-
-
-def update_file_share_paths(session, table, table_last_updated, max_paths_to_delete=2):
+def update_file_share_paths(session, paths, table_last_updated, max_paths_to_delete=2):
     """Update database with new file share paths"""
     # Get all existing linux_paths from database
     existing_paths = {path[0] for path in session.query(FileSharePathDB.mount_path).all()}
@@ -86,39 +74,26 @@ def update_file_share_paths(session, table, table_last_updated, max_paths_to_del
     num_new = 0
 
     # Update or insert records
-    for _, row in table.iterrows():
-        mount_path = row['linux_path']
-        new_paths.add(mount_path)
+    for path in paths:
+        new_paths.add(path.mount_path)
         
         # Check if path exists
-        existing_record = session.query(FileSharePathDB).filter_by(mount_path=mount_path).first()
+        existing_record = session.query(FileSharePathDB).filter_by(mount_path=path.mount_path).first()
         
         if existing_record:
             # Update existing record
-            existing_record.name = slugify_path(row['linux_path'])
-            existing_record.zone = row['lab']
-            existing_record.group = row['group']
-            existing_record.storage = row['storage']
-            existing_record.mount_path = row['linux_path']
-            existing_record.mac_path = row['mac_path']
-            existing_record.windows_path = row['windows_path']
-            existing_record.linux_path = row['linux_path']
-            
+            existing_record.name = path.name
+            existing_record.zone = path.zone
+            existing_record.group = path.group
+            existing_record.storage = path.storage
+            existing_record.mount_path = path.mount_path
+            existing_record.mac_path = path.mac_path
+            existing_record.windows_path = path.windows_path
+            existing_record.linux_path = path.linux_path
             num_existing += 1
-
         else:
             # Create new record
-            new_record = FileSharePathDB(
-                name=slugify_path(row['linux_path']),
-                zone=row['lab'],
-                group=row['group'],
-                storage=row['storage'],
-                mount_path=row['linux_path'],
-                mac_path=row['mac_path'],
-                windows_path=row['windows_path'],
-                linux_path=row['linux_path']
-            )
-            session.add(new_record)
+            session.add(path)
             num_new += 1
 
     logger.debug(f"Updated {num_existing} file share paths, added {num_new} file share paths")

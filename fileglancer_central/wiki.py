@@ -13,6 +13,10 @@ from datetime import datetime
 from atlassian import Confluence
 from .settings import get_settings
 from loguru import logger
+
+from fileglancer_central.database import FileSharePathDB
+from fileglancer_central.utils import slugify_path
+
 settings = get_settings()
 
 confluence_space = "SCS"
@@ -55,3 +59,17 @@ def get_wiki_table(confluence_url, confluence_token):
 
     logger.debug(f"Found {len(table)} file share paths in the wiki")  
     return table, table_last_updated
+
+
+def convert_table_to_file_share_paths(table):
+    """Convert the wiki table to a list of DB objects"""
+    return [FileSharePathDB(
+        name=slugify_path(row.linux_path),
+        zone=row.lab,
+        group=row.group,
+        storage=row.storage,
+        mount_path=row.linux_path,
+        mac_path=row.mac_path,
+        windows_path=row.windows_path,
+        linux_path=row.linux_path,
+    ) for row in table.itertuples(index=False)]
