@@ -16,6 +16,8 @@ from fileglancer_central.wiki import get_wiki_table, convert_table_to_file_share
 from fileglancer_central.issues import create_jira_ticket, get_jira_ticket_details, delete_jira_ticket
 from fileglancer_central.utils import slugify_path
 
+
+
 def cache_wiki_paths(confluence_url, confluence_token, force_refresh=False):
     with get_db_session() as session:
         # Get the last refresh time from the database
@@ -70,21 +72,16 @@ def create_app(settings):
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        # Setup
-        if callable(settings):
-            app.settings = settings()
-        else:
-            app.settings = settings
 
         # Configure logging based on the log level in the settings
         logger.remove()
-        logger.add(sys.stderr, level=app.settings.log_level)
+        logger.add(sys.stderr, level=settings.log_level)
 
         logger.info(f"Settings:")
-        logger.info(f"  log_level: {app.settings.log_level}")
-        logger.info(f"  db_url: {app.settings.db_url}")
-        logger.info(f"  confluence_url: {app.settings.confluence_url}")
-        logger.info(f"  jira_url: {app.settings.jira_url}")
+        logger.info(f"  log_level: {settings.log_level}")
+        logger.info(f"  db_url: {settings.db_url}")
+        logger.info(f"  confluence_url: {settings.confluence_url}")
+        logger.info(f"  jira_url: {settings.jira_url}")
         
         logger.info(f"Server ready")
         yield
@@ -101,9 +98,9 @@ def create_app(settings):
              description="Get all file share paths from the database")
     async def get_file_share_paths(force_refresh: bool = False) -> List[FileSharePath]:
         
-        confluence_url = app.settings.confluence_url
-        confluence_token = app.settings.confluence_token
-        file_share_mounts = app.settings.file_share_mounts
+        confluence_url = settings.confluence_url
+        confluence_token = settings.confluence_token
+        file_share_mounts = settings.file_share_mounts
         if not confluence_url and not confluence_token and not file_share_mounts:
             logger.error("You must configure `confluence_url` and `confluence_token` or set `file_share_mounts`.")
             raise HTTPException(status_code=500, detail="Confluence is not configured")
@@ -205,7 +202,7 @@ def create_app(settings):
     return app
 
 
-app = create_app(get_settings)
+app = create_app(get_settings())
 
 if __name__ == "__main__":
     import uvicorn
