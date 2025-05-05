@@ -11,6 +11,7 @@ from pydantic_settings import (
     YamlConfigSettingsSource
 )
 from loguru import logger
+    
 
 class Settings(BaseSettings):
     """ Settings can be read from a settings.yaml file, 
@@ -21,8 +22,16 @@ class Settings(BaseSettings):
 
     log_level: str = 'DEBUG'
     db_url: str = 'sqlite:///fileglancer.db'
+
+    # Confluence settings for getting the institutional file share paths
     confluence_url: Optional[HttpUrl] = None
     confluence_token: Optional[str] = None
+
+    # If confluence settings are not provided, use a static list of paths to mount as file shares
+    # This can specify the home directory using a ~/ prefix.
+    file_share_mounts: List[str] = []
+    
+    # JIRA settings for managing tickets
     jira_url: Optional[HttpUrl] = None
     jira_token: Optional[str] = None
 
