@@ -1,4 +1,3 @@
-import re
 import sys
 from datetime import datetime
 from typing import List, Optional, Dict
@@ -46,7 +45,6 @@ def cache_wiki_paths(confluence_url, confluence_token, force_refresh=False):
             linux_path=path.linux_path,
         ) for path in get_all_paths(session)]
         
-
 
 def create_app(settings):
 
