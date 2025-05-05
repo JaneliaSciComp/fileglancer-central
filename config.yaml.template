@@ -9,6 +9,13 @@ log_level: INFO
 db_url: sqlite:///fileglancer.db
 
 #
+# File share mount paths to view in the UI. 
+# (this setting is ignored if confluence_url is set below)
+#
+file_share_mounts:
+  - /tmp
+
+#
 # Confluence URL
 #
 confluence_url: https://wikis.janelia.org 
