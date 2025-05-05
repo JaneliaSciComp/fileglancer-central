@@ -15,7 +15,7 @@ from fileglancer_central.settings import get_settings
 from fileglancer_central.database import get_db_session, get_all_paths, get_last_refresh, update_file_share_paths, get_user_preference, set_user_preference, delete_user_preference, get_all_user_preferences, FileSharePathDB
 from fileglancer_central.wiki import get_wiki_table, convert_table_to_file_share_paths
 from fileglancer_central.issues import create_jira_ticket, get_jira_ticket_details, delete_jira_ticket
-
+from fileglancer_central.utils import slugify_path
 
 def cache_wiki_paths(confluence_url, confluence_token, force_refresh=False):
     with get_db_session() as session:
@@ -114,14 +114,14 @@ def create_app(settings):
             paths = cache_wiki_paths(confluence_url, confluence_token, force_refresh)
         else:
             paths = [FileSharePath(
-                name=path.name,
-                zone=path.zone,
-                group=path.group,
-                storage=path.storage,
-                mount_path=path.mount_path,
-                mac_path=path.mac_path,
-                windows_path=path.windows_path,
-                linux_path=path.linux_path,
+                name=slugify_path(path),
+                zone='Local',
+                group='local',
+                storage='local',
+                mount_path=path,
+                mac_path=path,
+                windows_path=path,
+                linux_path=path,
             ) for path in file_share_mounts]
 
         return FileSharePathResponse(paths=paths)
