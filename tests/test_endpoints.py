@@ -1,5 +1,6 @@
 import os
 import tempfile
+import shutil
 
 import pytest
 from fastapi.testclient import TestClient
@@ -7,12 +8,22 @@ from fastapi.testclient import TestClient
 from fileglancer_central.settings import Settings
 from fileglancer_central.app import create_app
 
+
 @pytest.fixture
-def test_app():
+def temp_dir():
+    temp_dir = tempfile.mkdtemp()
+    print(f"Created temp directory: {temp_dir}")
+    yield temp_dir
+    # Clean up the temp directory
+    print(f"Cleaning up temp directory: {temp_dir}")
+    shutil.rmtree(temp_dir)
+
+
+@pytest.fixture
+def test_app(temp_dir):
     """Create test FastAPI app"""
 
     # Create temp directory for test database
-    temp_dir = tempfile.mkdtemp()
     db_path = os.path.join(temp_dir, "test.db")
     db_url = f"sqlite:///{db_path}"
 
@@ -69,9 +80,10 @@ def test_delete_preference(test_client):
     assert response.status_code == 404
 
 
-def test_create_proxied_path(test_client):
+def test_create_proxied_path(test_client, temp_dir):
     """Test creating a new proxied path"""
-    mount_path = "/valid/mount/path"
+    mount_path = os.path.join(temp_dir, "test_create_proxied_path")
+    os.makedirs(mount_path)
     response = test_client.post(f"/proxied-path/testuser?mount_path={mount_path}")
     assert response.status_code == 200
     data = response.json()
@@ -81,45 +93,52 @@ def test_create_proxied_path(test_client):
     assert "sharing_name" in data
 
 
-# def test_get_proxied_paths(test_client):
-#     """Test retrieving all proxied paths for a user"""
-#     response = test_client.get("/proxied-path/testuser")
-#     assert response.status_code == 200
-#     data = response.json()
-#     assert isinstance(data, list)
+def test_get_proxied_paths(test_client, temp_dir):
+    """Test retrieving all proxied paths for a user"""
+    mount_path = os.path.join(temp_dir, "test_get_proxied_paths")
+    os.makedirs(mount_path)
+    response = test_client.post(f"/proxied-path/testuser?mount_path={mount_path}")
+    assert response.status_code == 200
+    response = test_client.get(f"/proxied-path/testuser")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) > 1
 
 
-# def test_update_proxied_path(test_client):
-#     """Test updating a proxied path"""
-#     # First, create a proxied path to update
-#     mount_path = "/valid/mount/path"
-#     response = test_client.post(f"/proxied-path/testuser?mount_path={mount_path}")
-#     assert response.status_code == 200
-#     data = response.json()
-#     sharing_key = data["sharing_key"]
+def test_update_proxied_path(test_client, temp_dir):
+    """Test updating a proxied path"""
+    # First, create a proxied path to update
+    mount_path = os.path.join(temp_dir, "test_update_proxied_path")
+    os.makedirs(mount_path)
+    response = test_client.post(f"/proxied-path/testuser?mount_path={mount_path}")
+    assert response.status_code == 200
+    data = response.json()
+    sharing_key = data["sharing_key"]
 
-#     # Update the proxied path
-#     new_mount_path = "/new/mount/path"
-#     response = test_client.put(f"/proxied-path/testuser/{sharing_key}?mount_path={new_mount_path}")
-#     assert response.status_code == 200
-#     updated_data = response.json()
-#     assert updated_data["mount_path"] == new_mount_path
+    # Update the proxied path
+    new_mount_path = temp_dir
+    response = test_client.put(f"/proxied-path/testuser/{sharing_key}?mount_path={new_mount_path}")
+    assert response.status_code == 200
+    updated_data = response.json()
+    assert updated_data["mount_path"] == new_mount_path
 
 
-# def test_delete_proxied_path(test_client):
-#     """Test deleting a proxied path"""
-#     # First, create a proxied path to delete
-#     mount_path = "/valid/mount/path"
-#     response = test_client.post(f"/proxied-path/testuser?mount_path={mount_path}")
-#     assert response.status_code == 200
-#     data = response.json()
-#     sharing_key = data["sharing_key"]
+def test_delete_proxied_path(test_client, temp_dir):
+    """Test deleting a proxied path"""
+    # First, create a proxied path to delete
+    mount_path = os.path.join(temp_dir, "test_delete_proxied_path")
+    os.makedirs(mount_path)
+    response = test_client.post(f"/proxied-path/testuser?mount_path={mount_path}")
+    assert response.status_code == 200
+    data = response.json()
+    sharing_key = data["sharing_key"]
 
-#     # Delete the proxied path
-#     response = test_client.delete(f"/proxied-path/testuser/{sharing_key}")
-#     assert response.status_code == 200
+    # Delete the proxied path
+    response = test_client.delete(f"/proxied-path/testuser/{sharing_key}")
+    assert response.status_code == 200
 
-#     # Verify deletion
-#     response = test_client.get(f"/proxied-path/testuser/{sharing_key}")
-#     assert response.status_code == 404
+    # Verify deletion
+    response = test_client.get(f"/proxied-path/testuser/{sharing_key}")
+    assert response.status_code == 404
 

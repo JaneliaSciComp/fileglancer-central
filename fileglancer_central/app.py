@@ -93,6 +93,7 @@ def create_app(settings):
         expose_headers=["Range", "Content-Range"],
     )
 
+
     @app.exception_handler(StarletteHTTPException)
     async def http_exception_handler(request, exc):
         return JSONResponse({"error":str(exc.detail)}, status_code=exc.status_code)
@@ -102,6 +103,7 @@ def create_app(settings):
     async def validation_exception_handler(request, exc):
         return JSONResponse({"error":str(exc)}, status_code=400)
     
+
     @app.get("/", include_in_schema=False)
     async def docs_redirect():
         return RedirectResponse("/docs")
@@ -224,7 +226,7 @@ def create_app(settings):
 
         # Verify that we can access the sharing path
         if not os.path.exists(mount_path):
-            raise HTTPException(status_code=404, detail="Given mount path does not exist")
+            raise HTTPException(status_code=400, detail="Given mount path does not exist")
 
         sharing_name = os.path.basename(mount_path)
 
@@ -236,7 +238,7 @@ def create_app(settings):
                 sharing_name=new_path.sharing_name,
                 mount_path=new_path.mount_path
             )
-
+        
 
     @app.get("/proxied-path/{username}", response_model=List[ProxiedPath],
              description="Retrieve all proxied paths for a user")
@@ -245,12 +247,28 @@ def create_app(settings):
             return db.get_all_proxied_paths(session, username)
 
 
+    @app.get("/proxied-path/{username}/{sharing_key}", response_model=ProxiedPath,
+             description="Retrieve a proxied path by sharing key")
+    async def get_proxied_path(username: str = Path(..., description="The username of the user who owns the proxied paths"),
+                               sharing_key: str = Path(..., description="The sharing key of the proxied path")):
+        with db.get_db_session() as session:
+            path = db.get_proxied_path_by_sharing_key(session, sharing_key)
+            if not path:
+                raise HTTPException(status_code=404, detail="Proxied path not found")
+            if path.username != username:
+                raise HTTPException(status_code=404, detail="Proxied path not found for user {username}")
+            return path
+
+
     @app.put("/proxied-path/{username}/{sharing_key}", description="Update a proxied path by sharing key")
     async def update_proxied_path(username: str = Path(..., description="The username of the user who owns the proxied paths"),
                                   sharing_key: str = Path(..., description="The sharing key of the proxied path"),
                                   mount_path: Optional[str] = Query(default=None, description="The root path on the file system to be proxied"),
                                   sharing_name: Optional[str] = Query(default=None, description="The sharing path of the proxied path")):
         with db.get_db_session() as session:
+            if mount_path:
+                if not os.path.exists(mount_path):
+                    raise HTTPException(status_code=400, detail="Given mount path does not exist")
             updated = db.update_proxied_path(session, username, sharing_key, new_mount_path=mount_path, new_sharing_name=sharing_name)
             return ProxiedPath(
                 username=updated.username,
