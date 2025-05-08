@@ -72,7 +72,7 @@ def test_delete_preference(test_client):
 def test_create_proxied_path(test_client):
     """Test creating a new proxied path"""
     mount_path = "/valid/mount/path"
-    response = test_client.post(f"/proxiedpath/testuser?mount_path={mount_path}")
+    response = test_client.post(f"/proxied-path/testuser?mount_path={mount_path}")
     assert response.status_code == 200
     data = response.json()
     assert data["username"] == "testuser"
@@ -83,7 +83,7 @@ def test_create_proxied_path(test_client):
 
 # def test_get_proxied_paths(test_client):
 #     """Test retrieving all proxied paths for a user"""
-#     response = test_client.get("/proxiedpath/testuser")
+#     response = test_client.get("/proxied-path/testuser")
 #     assert response.status_code == 200
 #     data = response.json()
 #     assert isinstance(data, list)
@@ -93,14 +93,14 @@ def test_create_proxied_path(test_client):
 #     """Test updating a proxied path"""
 #     # First, create a proxied path to update
 #     mount_path = "/valid/mount/path"
-#     response = test_client.post(f"/proxiedpath/testuser?mount_path={mount_path}")
+#     response = test_client.post(f"/proxied-path/testuser?mount_path={mount_path}")
 #     assert response.status_code == 200
 #     data = response.json()
 #     sharing_key = data["sharing_key"]
 
 #     # Update the proxied path
 #     new_mount_path = "/new/mount/path"
-#     response = test_client.put(f"/proxiedpath/testuser/{sharing_key}?mount_path={new_mount_path}")
+#     response = test_client.put(f"/proxied-path/testuser/{sharing_key}?mount_path={new_mount_path}")
 #     assert response.status_code == 200
 #     updated_data = response.json()
 #     assert updated_data["mount_path"] == new_mount_path
@@ -110,16 +110,16 @@ def test_create_proxied_path(test_client):
 #     """Test deleting a proxied path"""
 #     # First, create a proxied path to delete
 #     mount_path = "/valid/mount/path"
-#     response = test_client.post(f"/proxiedpath/testuser?mount_path={mount_path}")
+#     response = test_client.post(f"/proxied-path/testuser?mount_path={mount_path}")
 #     assert response.status_code == 200
 #     data = response.json()
 #     sharing_key = data["sharing_key"]
 
 #     # Delete the proxied path
-#     response = test_client.delete(f"/proxiedpath/testuser/{sharing_key}")
+#     response = test_client.delete(f"/proxied-path/testuser/{sharing_key}")
 #     assert response.status_code == 200
 
 #     # Verify deletion
-#     response = test_client.get(f"/proxiedpath/testuser/{sharing_key}")
+#     response = test_client.get(f"/proxied-path/testuser/{sharing_key}")
 #     assert response.status_code == 404
 

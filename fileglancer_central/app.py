@@ -217,7 +217,7 @@ def create_app(settings):
             return {"message": f"Preference {key} deleted for user {username}"}
 
 
-    @app.post("/proxiedpath/{username}", response_model=ProxiedPath,
+    @app.post("/proxied-path/{username}", response_model=ProxiedPath,
               description="Create a new proxied path")
     async def create_proxied_path(username: str = Path(..., description="The username of the user who owns this proxied path"),
                                   mount_path: str = Query(..., description="The root path on the file system to be proxied")):
@@ -238,14 +238,14 @@ def create_app(settings):
             )
 
 
-    @app.get("/proxiedpath/{username}", response_model=List[ProxiedPath],
+    @app.get("/proxied-path/{username}", response_model=List[ProxiedPath],
              description="Retrieve all proxied paths for a user")
     async def get_proxied_paths(username: str = Path(..., description="The username of the user who owns the proxied paths")):
         with db.get_db_session() as session:
             return db.get_all_proxied_paths(session, username)
 
 
-    @app.put("/proxiedpath/{username}/{sharing_key}", description="Update a proxied path by sharing key")
+    @app.put("/proxied-path/{username}/{sharing_key}", description="Update a proxied path by sharing key")
     async def update_proxied_path(username: str = Path(..., description="The username of the user who owns the proxied paths"),
                                   sharing_key: str = Path(..., description="The sharing key of the proxied path"),
                                   mount_path: Optional[str] = Query(default=None, description="The root path on the file system to be proxied"),
@@ -260,7 +260,7 @@ def create_app(settings):
             )
 
 
-    @app.delete("/proxiedpath/{username}/{sharing_key}", description="Delete a proxied path by sharing key")
+    @app.delete("/proxied-path/{username}/{sharing_key}", description="Delete a proxied path by sharing key")
     async def delete_proxied_path(username: str = Path(..., description="The username of the user who owns the proxied paths"),
                                   sharing_key: str = Path(..., description="The sharing key of the proxied path")):
         with db.get_db_session() as session:
