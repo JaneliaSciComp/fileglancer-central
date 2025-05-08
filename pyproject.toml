@@ -1,6 +1,6 @@
 [project]
 name = "fileglancer-central"
-version = "0.1.0"
+version = "0.2.0"
 readme = "README.md"
 authors = [
     { name = "Konrad Rokicki", email = "rokicki@janelia.hhmi.org" }
