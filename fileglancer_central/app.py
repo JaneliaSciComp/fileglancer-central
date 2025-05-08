@@ -4,18 +4,20 @@ from typing import List, Optional, Dict
 
 from loguru import logger
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse, JSONResponse
+from fastapi.responses import RedirectResponse, Response,JSONResponse, PlainTextResponse
 from fastapi.exceptions import RequestValidationError, StarletteHTTPException
 
 from fileglancer_central.model import FileSharePath, FileSharePathResponse, Ticket
 from fileglancer_central.settings import get_settings
-from fileglancer_central.database import get_db_session, get_all_paths, get_last_refresh, update_file_share_paths, get_user_preference, set_user_preference, delete_user_preference, get_all_user_preferences, FileSharePathDB
+from fileglancer_central.database import *
 from fileglancer_central.wiki import get_wiki_table, convert_table_to_file_share_paths
 from fileglancer_central.issues import create_jira_ticket, get_jira_ticket_details, delete_jira_ticket
 from fileglancer_central.utils import slugify_path
 
+from x2s3.utils import get_read_access_acl, get_nosuchbucket_response, get_error_response
+from x2s3.client_file import FileProxyClient
 
 
 def cache_wiki_paths(confluence_url, confluence_token, force_refresh=False):
@@ -48,6 +50,20 @@ def cache_wiki_paths(confluence_url, confluence_token, force_refresh=False):
         ) for path in get_all_paths(session)]
         
 
+
+def get_file_proxy_client(sharing_key: str, sharing_name: str) -> FileProxyClient | Response:
+    with get_db_session() as session:
+        proxied_path = get_proxied_path_by_sharing_key(session, sharing_key)
+        if not proxied_path:
+            return get_nosuchbucket_response(sharing_name)
+        if proxied_path.sharing_name != sharing_name:
+            return get_error_response(400, "InvalidArgument", f"Sharing name mismatch for sharing key {sharing_key}", sharing_name)
+        return FileProxyClient(proxy_kwargs={
+            'target_name': sharing_name,
+            'path': proxied_path.mount_path,
+        })
+
+
 def create_app(settings):
 
     app = FastAPI()
@@ -59,6 +75,12 @@ def create_app(settings):
         allow_headers=["*"],
         expose_headers=["Range", "Content-Range"],
     )
+
+
+    @app.get('/robots.txt', response_class=PlainTextResponse)
+    def robots():
+        return """User-agent: *\nDisallow: /"""
+
 
     @app.exception_handler(StarletteHTTPException)
     async def http_exception_handler(request, exc):
@@ -86,6 +108,7 @@ def create_app(settings):
         logger.info(f"Server ready")
         yield
         # Cleanup (if needed)
+        pass
 
     app = FastAPI(lifespan=lifespan)
 
@@ -197,6 +220,50 @@ def create_app(settings):
             if not deleted:
                 raise HTTPException(status_code=404, detail="Preference not found")
             return {"message": f"Preference {key} deleted for user {username}"}
+
+
+    @app.get("/files/{sharing_key}/{sharing_name}/{path:path}")
+    async def target_dispatcher(request: Request,
+                                sharing_key: str,
+                                sharing_name: str,
+                                path: str,
+                                list_type: int = Query(None, alias="list-type"),
+                                continuation_token: Optional[str] = Query(None, alias="continuation-token"),
+                                delimiter: Optional[str] = Query(None, alias="delimiter"),
+                                encoding_type: Optional[str] = Query(None, alias="encoding-type"),
+                                fetch_owner: Optional[bool] = Query(None, alias="fetch-owner"),
+                                max_keys: Optional[int] = Query(1000, alias="max-keys"),
+                                prefix: Optional[str] = Query(None, alias="prefix"),
+                                start_after: Optional[str] = Query(None, alias="start-after")):
+
+        if 'acl' in request.query_params:
+            return get_read_access_acl()
+
+        client = get_file_proxy_client(sharing_key, sharing_name)
+        if isinstance(client, Response):
+            return client
+        
+        if list_type:
+            if list_type == 2:
+                return await client.list_objects_v2(continuation_token, delimiter, \
+                    encoding_type, fetch_owner, max_keys, prefix, start_after)
+            else:
+                return get_error_response(400, "InvalidArgument", f"Invalid list type {list_type}", path)
+        else:
+            range_header = request.headers.get("range")
+            return await client.get_object(path, range_header)
+
+
+    @app.head("/files/{sharing_key}/{sharing_name}/{path:path}")
+    async def head_object(sharing_key: str, sharing_name: str, path: str):
+        try:
+            client = get_file_proxy_client(sharing_key, sharing_name)
+            if isinstance(client, Response):
+                return client
+            return await client.head_object(path)
+        except:
+            logger.opt(exception=sys.exc_info()).info("Error requesting head")
+            return get_error_response(500, "InternalError", "Error requesting HEAD", path)
 
 
     return app
