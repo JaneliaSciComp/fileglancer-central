@@ -6,12 +6,7 @@ import pytest
 import pandas as pd
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from fileglancer_central.database import (
-    FileSharePathDB, LastRefreshDB, UserPreferenceDB,
-    get_all_paths, get_last_refresh, update_file_share_paths,
-    get_user_preference, set_user_preference, delete_user_preference,
-    get_all_user_preferences, Base
-)
+from fileglancer_central.database import *
 from fileglancer_central.wiki import convert_table_to_file_share_paths
 
 @pytest.fixture
@@ -142,3 +137,52 @@ def test_user_preferences(db_session):
     delete_user_preference(db_session, "testuser", "test_key")
     pref = get_user_preference(db_session, "testuser", "test_key")
     assert pref is None
+
+
+def test_create_proxied_path(db_session):
+    # Test creating a new proxied path
+    username = "testuser"
+    sharing_path = "/test/path"
+    mount_path = "/mount/path"
+    proxied_path = create_proxied_path(db_session, username, sharing_path, mount_path)
+    
+    assert proxied_path.username == username
+    assert proxied_path.sharing_path == sharing_path
+    assert proxied_path.sharing_key is not None
+
+
+def test_get_proxied_path_by_sharing_key(db_session):
+    # Test retrieving a proxied path by sharing key
+    username = "testuser"
+    sharing_path = "/test/path"
+    mount_path = "/mount/path"
+    created_path = create_proxied_path(db_session, username, sharing_path, mount_path)
+    
+    retrieved_path = get_proxied_path_by_sharing_key(db_session, created_path.sharing_key)
+    assert retrieved_path is not None
+    assert retrieved_path.sharing_key == created_path.sharing_key
+
+
+def test_update_proxied_path(db_session):
+    # Test updating a proxied path
+    username = "testuser"
+    sharing_path = "/test/path"
+    mount_path = "/mount/path"
+    new_sharing_path = "/new/test/path"
+    created_path = create_proxied_path(db_session, username, sharing_path, mount_path)
+    
+    updated_path = update_proxied_path(db_session, created_path.sharing_key, new_sharing_path=new_sharing_path)
+    assert updated_path.sharing_path == new_sharing_path
+
+
+def test_delete_proxied_path(db_session):
+    # Test deleting a proxied path
+    username = "testuser"
+    sharing_path = "/test/path"
+    mount_path = "/mount/path"
+    created_path = create_proxied_path(db_session, username, sharing_path, mount_path)
+    
+    delete_proxied_path(db_session, username, created_path.sharing_key)
+    deleted_path = get_proxied_path_by_sharing_key(db_session, created_path.sharing_key)
+    assert deleted_path is None
+

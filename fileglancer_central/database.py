@@ -1,8 +1,9 @@
+import secrets
 from datetime import datetime
 
 from sqlalchemy import create_engine, Column, String, Integer, DateTime, JSON, UniqueConstraint
 from sqlalchemy.orm import sessionmaker, declarative_base, Session
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 from loguru import logger
 
 from fileglancer_central.settings import get_settings
@@ -44,6 +45,16 @@ class UserPreferenceDB(Base):
     __table_args__ = (
         UniqueConstraint('username', 'key', name='uq_user_pref'),
     )
+
+
+class ProxiedPathDB(Base):
+    """Database model for storing proxied paths"""
+    __tablename__ = 'proxied_paths'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    username = Column(String, nullable=False)
+    sharing_key = Column(String, nullable=False, unique=True)
+    sharing_path = Column(String, nullable=False)
+    mount_path = Column(String, nullable=False)
 
 
 def get_db_session():
@@ -162,6 +173,48 @@ def get_all_user_preferences(session: Session, username: str) -> Dict[str, Dict]
     """Get all preferences for a user"""
     prefs = session.query(UserPreferenceDB).filter_by(username=username).all()
     return {pref.key: pref.value for pref in prefs}
+
+
+def get_all_proxied_paths(session: Session, username: str) -> List[ProxiedPathDB]:
+    """Get all proxied paths for a user"""
+    return session.query(ProxiedPathDB).filter_by(username=username).all()
+
+
+def get_proxied_path_by_sharing_key(session: Session, sharing_key: str) -> Optional[ProxiedPathDB]:
+    """Get a proxied path by sharing key"""
+    return session.query(ProxiedPathDB).filter_by(sharing_key=sharing_key).first()
+
+
+def create_proxied_path(session: Session, username: str, sharing_path: str, mount_path: str) -> ProxiedPathDB:
+    """Create a new proxied path"""
+    sharing_key = secrets.token_urlsafe(6)
+    session.add(ProxiedPathDB(username=username, sharing_key=sharing_key, sharing_path=sharing_path, mount_path=mount_path))
+    session.commit()
+    return get_proxied_path_by_sharing_key(session, sharing_key)
+    
+
+def update_proxied_path(session: Session, 
+                        sharing_key: str, 
+                        new_sharing_path: Optional[str] = None, 
+                        new_mount_path: Optional[str] = None) -> ProxiedPathDB:
+    """Update a proxied path"""
+    proxied_path = get_proxied_path_by_sharing_key(session, sharing_key)
+    if not proxied_path:
+        raise ValueError(f"Proxied path with sharing key {sharing_key} not found")
+    
+    if new_sharing_path:
+        proxied_path.sharing_path = new_sharing_path
+    if new_mount_path:
+            proxied_path.mount_path = new_mount_path
+    session.commit()
+    
+    return proxied_path
+    
+
+def delete_proxied_path(session: Session, username: str, sharing_key: str):
+    """Delete a proxied path"""
+    session.query(ProxiedPathDB).filter_by(username=username, sharing_key=sharing_key).delete()
+    session.commit()
 
 
 # Test harness
