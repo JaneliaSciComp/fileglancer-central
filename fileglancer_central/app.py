@@ -65,32 +65,6 @@ def get_file_proxy_client(sharing_key: str, sharing_name: str) -> FileProxyClien
 
 def create_app(settings):
 
-    app = FastAPI()
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["GET","HEAD"],
-        allow_headers=["*"],
-        expose_headers=["Range", "Content-Range"],
-    )
-
-
-    @app.get('/robots.txt', response_class=PlainTextResponse)
-    def robots():
-        return """User-agent: *\nDisallow: /"""
-
-
-    @app.exception_handler(StarletteHTTPException)
-    async def http_exception_handler(request, exc):
-        return JSONResponse({"error":str(exc.detail)}, status_code=exc.status_code)
-
-
-    @app.exception_handler(RequestValidationError)
-    async def validation_exception_handler(request, exc):
-        return JSONResponse({"error":str(exc)}, status_code=400)
-    
-
     @asynccontextmanager
     async def lifespan(app: FastAPI):
 
@@ -110,10 +84,32 @@ def create_app(settings):
         pass
 
     app = FastAPI(lifespan=lifespan)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["GET","HEAD"],
+        allow_headers=["*"],
+        expose_headers=["Range", "Content-Range"],
+    )
 
+    @app.exception_handler(StarletteHTTPException)
+    async def http_exception_handler(request, exc):
+        return JSONResponse({"error":str(exc.detail)}, status_code=exc.status_code)
+
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_exception_handler(request, exc):
+        return JSONResponse({"error":str(exc)}, status_code=400)
+    
     @app.get("/", include_in_schema=False)
     async def docs_redirect():
         return RedirectResponse("/docs")
+
+
+    @app.get('/robots.txt', response_class=PlainTextResponse)
+    def robots():
+        return """User-agent: *\nDisallow: /"""
 
 
     @app.get("/file-share-paths", response_model=FileSharePathResponse, 
