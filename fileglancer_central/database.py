@@ -223,18 +223,3 @@ def delete_proxied_path(session: Session, username: str, sharing_key: str):
     session.query(ProxiedPathDB).filter_by(username=username, sharing_key=sharing_key).delete()
     session.commit()
 
-
-# Test harness
-if __name__ == "__main__":
-    session = get_db_session()
-    value = {"a": 1, "b": [1, 2, 3]}
-    set_user_preference(session, "tester", "favorite_color", "blue")
-    set_user_preference(session, "tester", "test_key", value)
-    print(get_all_user_preferences(session, "tester"))
-    assert get_user_preference(session, "tester", "favorite_color") == "blue"
-    assert get_user_preference(session, "tester", "test_key") == value
-    delete_user_preference(session, "tester", "test_key")
-    delete_user_preference(session, "tester", "favorite_color") 
-    print(get_all_user_preferences(session, "tester"))
-    assert get_user_preference(session, "tester", "test_key") is None
-    assert get_user_preference(session, "tester", "favorite_color") is None
