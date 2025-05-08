@@ -71,20 +71,11 @@ pixi run -e test pytest
 
 ## Building the Docker container
 
-Run the Docker build on a Linux x86 system, replacing `<version>` with your version number:
+Run the Docker build, replacing `<version>` with your version number:
 
 ```bash
 cd docker/
 export VERSION=<version>
-docker build . --build-arg GIT_TAG=$VERSION -t ghcr.io/janeliascicomp/fileglancer-central:$VERSION
+docker buildx build --platform linux/amd64,linux/arm64 --build-arg GIT_TAG=$VERSION -t ghcr.io/janeliascicomp/fileglancer-central:$VERSION -t ghcr.io/janeliascicomp/fileglancer-central:latest --push .
 ```
-
-## Pushing the Docker container
-
-```bash
-docker push ghcr.io/janeliascicomp/fileglancer-central:$VERSION
-docker tag ghcr.io/janeliascicomp/fileglancer-central:$VERSION ghcr.io/janeliascicomp/fileglancer-central:latest
-docker push ghcr.io/janeliascicomp/fileglancer-central:latest
-```
-
 
