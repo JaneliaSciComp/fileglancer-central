@@ -1,8 +1,9 @@
+import secrets
 from datetime import datetime
 
 from sqlalchemy import create_engine, Column, String, Integer, DateTime, JSON, UniqueConstraint
 from sqlalchemy.orm import sessionmaker, declarative_base, Session
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 from loguru import logger
 
 from fileglancer_central.settings import get_settings
@@ -43,6 +44,19 @@ class UserPreferenceDB(Base):
 
     __table_args__ = (
         UniqueConstraint('username', 'key', name='uq_user_pref'),
+    )
+
+
+class ProxiedPathDB(Base):
+    """Database model for storing proxied paths"""
+    __tablename__ = 'proxied_paths'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    username = Column(String, nullable=False)
+    sharing_key = Column(String, nullable=False, unique=True)
+    sharing_name = Column(String, nullable=False)
+    mount_path = Column(String, nullable=False)
+    __table_args__ = (
+        UniqueConstraint('username', 'mount_path', name='uq_proxied_path'),
     )
 
 
@@ -164,17 +178,48 @@ def get_all_user_preferences(session: Session, username: str) -> Dict[str, Dict]
     return {pref.key: pref.value for pref in prefs}
 
 
-# Test harness
-if __name__ == "__main__":
-    session = get_db_session()
-    value = {"a": 1, "b": [1, 2, 3]}
-    set_user_preference(session, "tester", "favorite_color", "blue")
-    set_user_preference(session, "tester", "test_key", value)
-    print(get_all_user_preferences(session, "tester"))
-    assert get_user_preference(session, "tester", "favorite_color") == "blue"
-    assert get_user_preference(session, "tester", "test_key") == value
-    delete_user_preference(session, "tester", "test_key")
-    delete_user_preference(session, "tester", "favorite_color") 
-    print(get_all_user_preferences(session, "tester"))
-    assert get_user_preference(session, "tester", "test_key") is None
-    assert get_user_preference(session, "tester", "favorite_color") is None
+def get_all_proxied_paths(session: Session, username: str) -> List[ProxiedPathDB]:
+    """Get all proxied paths for a user"""
+    return session.query(ProxiedPathDB).filter_by(username=username).all()
+
+
+def get_proxied_path_by_sharing_key(session: Session, sharing_key: str) -> Optional[ProxiedPathDB]:
+    """Get a proxied path by sharing key"""
+    return session.query(ProxiedPathDB).filter_by(sharing_key=sharing_key).first()
+
+
+def create_proxied_path(session: Session, username: str, sharing_name: str, mount_path: str) -> ProxiedPathDB:
+    """Create a new proxied path"""
+    sharing_key = secrets.token_urlsafe(6)
+    session.add(ProxiedPathDB(username=username, sharing_key=sharing_key, sharing_name=sharing_name, mount_path=mount_path))
+    session.commit()
+    return get_proxied_path_by_sharing_key(session, sharing_key)
+    
+
+def update_proxied_path(session: Session, 
+                        username: str,
+                        sharing_key: str, 
+                        new_sharing_name: Optional[str] = None, 
+                        new_mount_path: Optional[str] = None) -> ProxiedPathDB:
+    """Update a proxied path"""
+    proxied_path = get_proxied_path_by_sharing_key(session, sharing_key)
+    if not proxied_path:
+        raise ValueError(f"Proxied path with sharing key {sharing_key} not found")
+    
+    if username != proxied_path.username:
+        raise ValueError(f"Proxied path with sharing key {sharing_key} not found for user {username}")
+
+    if new_sharing_name:
+        proxied_path.sharing_name = new_sharing_name
+    if new_mount_path:
+        proxied_path.mount_path = new_mount_path
+    session.commit()
+    
+    return proxied_path
+    
+
+def delete_proxied_path(session: Session, username: str, sharing_key: str):
+    """Delete a proxied path"""
+    session.query(ProxiedPathDB).filter_by(username=username, sharing_key=sharing_key).delete()
+    session.commit()
+

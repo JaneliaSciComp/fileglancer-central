@@ -108,3 +108,17 @@ class UserPreference(BaseModel):
         description="The value of the preference"
     )
 
+class ProxiedPath(BaseModel):
+    """A proxied path which is used to share a file system path via a URL"""
+    username: str = Field(
+        description="The username of the user who owns this proxied path"
+    )
+    sharing_key: str = Field(
+        description="The sharing key is part of the URL proxy path. It is used to uniquely identify the proxied path."
+    )
+    sharing_name: str = Field(
+        description="The sharing path is part of the URL proxy path. It is mainly used to provide file extension information to the client."
+    )
+    mount_path: str = Field(
+        description="The root path on the file system to be proxied"
+    )
