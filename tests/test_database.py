@@ -142,21 +142,21 @@ def test_user_preferences(db_session):
 def test_create_proxied_path(db_session):
     # Test creating a new proxied path
     username = "testuser"
-    sharing_path = "/test/path"
+    sharing_name = "/test/path"
     mount_path = "/mount/path"
-    proxied_path = create_proxied_path(db_session, username, sharing_path, mount_path)
+    proxied_path = create_proxied_path(db_session, username, sharing_name, mount_path)
     
     assert proxied_path.username == username
-    assert proxied_path.sharing_path == sharing_path
+    assert proxied_path.sharing_name == sharing_name
     assert proxied_path.sharing_key is not None
 
 
 def test_get_proxied_path_by_sharing_key(db_session):
     # Test retrieving a proxied path by sharing key
     username = "testuser"
-    sharing_path = "/test/path"
+    sharing_name = "/test/path"
     mount_path = "/mount/path"
-    created_path = create_proxied_path(db_session, username, sharing_path, mount_path)
+    created_path = create_proxied_path(db_session, username, sharing_name, mount_path)
     
     retrieved_path = get_proxied_path_by_sharing_key(db_session, created_path.sharing_key)
     assert retrieved_path is not None
@@ -166,21 +166,21 @@ def test_get_proxied_path_by_sharing_key(db_session):
 def test_update_proxied_path(db_session):
     # Test updating a proxied path
     username = "testuser"
-    sharing_path = "/test/path"
+    sharing_name = "/test/path"
     mount_path = "/mount/path"
-    new_sharing_path = "/new/test/path"
-    created_path = create_proxied_path(db_session, username, sharing_path, mount_path)
+    new_sharing_name = "/new/test/path"
+    created_path = create_proxied_path(db_session, username, sharing_name, mount_path)
     
-    updated_path = update_proxied_path(db_session, created_path.sharing_key, new_sharing_path=new_sharing_path)
-    assert updated_path.sharing_path == new_sharing_path
+    updated_path = update_proxied_path(db_session, username, created_path.sharing_key, new_sharing_name=new_sharing_name)
+    assert updated_path.sharing_name == new_sharing_name
 
 
 def test_delete_proxied_path(db_session):
     # Test deleting a proxied path
     username = "testuser"
-    sharing_path = "/test/path"
+    sharing_name = "/test/path"
     mount_path = "/mount/path"
-    created_path = create_proxied_path(db_session, username, sharing_path, mount_path)
+    created_path = create_proxied_path(db_session, username, sharing_name, mount_path)
     
     delete_proxied_path(db_session, username, created_path.sharing_key)
     deleted_path = get_proxied_path_by_sharing_key(db_session, created_path.sharing_key)

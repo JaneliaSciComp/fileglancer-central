@@ -53,8 +53,11 @@ class ProxiedPathDB(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     username = Column(String, nullable=False)
     sharing_key = Column(String, nullable=False, unique=True)
-    sharing_path = Column(String, nullable=False)
+    sharing_name = Column(String, nullable=False)
     mount_path = Column(String, nullable=False)
+    __table_args__ = (
+        UniqueConstraint('username', 'mount_path', name='uq_proxied_path'),
+    )
 
 
 def get_db_session():
@@ -185,27 +188,31 @@ def get_proxied_path_by_sharing_key(session: Session, sharing_key: str) -> Optio
     return session.query(ProxiedPathDB).filter_by(sharing_key=sharing_key).first()
 
 
-def create_proxied_path(session: Session, username: str, sharing_path: str, mount_path: str) -> ProxiedPathDB:
+def create_proxied_path(session: Session, username: str, sharing_name: str, mount_path: str) -> ProxiedPathDB:
     """Create a new proxied path"""
     sharing_key = secrets.token_urlsafe(6)
-    session.add(ProxiedPathDB(username=username, sharing_key=sharing_key, sharing_path=sharing_path, mount_path=mount_path))
+    session.add(ProxiedPathDB(username=username, sharing_key=sharing_key, sharing_name=sharing_name, mount_path=mount_path))
     session.commit()
     return get_proxied_path_by_sharing_key(session, sharing_key)
     
 
 def update_proxied_path(session: Session, 
+                        username: str,
                         sharing_key: str, 
-                        new_sharing_path: Optional[str] = None, 
+                        new_sharing_name: Optional[str] = None, 
                         new_mount_path: Optional[str] = None) -> ProxiedPathDB:
     """Update a proxied path"""
     proxied_path = get_proxied_path_by_sharing_key(session, sharing_key)
     if not proxied_path:
         raise ValueError(f"Proxied path with sharing key {sharing_key} not found")
     
-    if new_sharing_path:
-        proxied_path.sharing_path = new_sharing_path
+    if username != proxied_path.username:
+        raise ValueError(f"Proxied path with sharing key {sharing_key} not found for user {username}")
+
+    if new_sharing_name:
+        proxied_path.sharing_name = new_sharing_name
     if new_mount_path:
-            proxied_path.mount_path = new_mount_path
+        proxied_path.mount_path = new_mount_path
     session.commit()
     
     return proxied_path
