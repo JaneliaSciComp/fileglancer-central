@@ -1,3 +1,4 @@
+# check=skip=JSONArgsRecommended
 FROM ghcr.io/prefix-dev/pixi:0.41.4-oracular AS build
 ARG GIT_TAG=main
 
