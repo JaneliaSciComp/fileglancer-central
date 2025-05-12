@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     
     # JIRA settings for managing tickets
     jira_url: Optional[HttpUrl] = None
+    jira_username: Optional[str] = None
     jira_token: Optional[str] = None
 
     model_config = SettingsConfigDict(
