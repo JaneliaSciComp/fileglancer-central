@@ -25,6 +25,7 @@ class Settings(BaseSettings):
 
     # Confluence settings for getting the institutional file share paths
     confluence_url: Optional[HttpUrl] = None
+    confluence_username: Optional[str] = None
     confluence_token: Optional[str] = None
 
     # If confluence settings are not provided, use a static list of paths to mount as file shares

@@ -22,7 +22,7 @@ from x2s3.utils import get_read_access_acl, get_nosuchbucket_response, get_error
 from x2s3.client_file import FileProxyClient
 
 
-def cache_wiki_paths(confluence_url, confluence_token, force_refresh=False):
+def cache_wiki_paths(confluence_url, confluence_username, confluence_token, force_refresh=False):
     with db.get_db_session() as session:
         # Get the last refresh time from the database
         last_refresh = db.get_last_refresh(session)
@@ -32,7 +32,7 @@ def cache_wiki_paths(confluence_url, confluence_token, force_refresh=False):
             logger.info("Last refresh was more than a day ago, checking for updates...")
             
             # Get updated paths from the wiki
-            table, table_last_updated = get_wiki_table(confluence_url, confluence_token)
+            table, table_last_updated = get_wiki_table(confluence_url, confluence_username, confluence_token)
 
             new_paths = convert_table_to_file_share_paths(table)
 
@@ -119,6 +119,7 @@ def create_app(settings):
     async def get_file_share_paths(force_refresh: bool = False) -> List[FileSharePath]:
         
         confluence_url = settings.confluence_url
+        confluence_username = settings.confluence_username
         confluence_token = settings.confluence_token
         file_share_mounts = settings.file_share_mounts
         if not confluence_url and not confluence_token and not file_share_mounts:
@@ -126,7 +127,7 @@ def create_app(settings):
             raise HTTPException(status_code=500, detail="Confluence is not configured")
         
         if confluence_url and confluence_token:
-            paths = cache_wiki_paths(confluence_url, confluence_token, force_refresh)
+            paths = cache_wiki_paths(confluence_url, confluence_username, confluence_token, force_refresh)
         else:
             paths = [FileSharePath(
                 name=slugify_path(path),

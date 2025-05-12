@@ -27,9 +27,9 @@ def parse_iso_timestamp(timestamp):
     return datetime.fromisoformat(timestamp)
 
 
-def get_wiki_table(confluence_url, confluence_token):
+def get_wiki_table(confluence_url, confluence_username, confluence_token):
     """Fetch and parse the file share paths table from the wiki"""
-    confluence = Confluence(url=str(confluence_url), token=confluence_token)
+    confluence = Confluence(url=str(confluence_url), username=confluence_username, password=confluence_token, cloud=True)
     
     page = confluence.get_page_by_title(confluence_space, confluence_page)
     page_id = page['id']
