@@ -18,7 +18,7 @@ def get_jira_client() -> Jira:
     if not all([jira_server, jira_token]):
         raise ValueError("Missing required JIRA credentials in environment variables")
     
-    return Jira(url=jira_server, username=jira_username, password=jira_token)
+    return Jira(url=jira_server, username=jira_username, password=jira_token, cloud=True)
 
 
 def create_jira_ticket(summary: str, description: str, project_key: str, issue_type: str) -> str:
