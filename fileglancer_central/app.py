@@ -1,7 +1,7 @@
 import os
 import sys
 from datetime import datetime
-from typing import Annotated, List, Optional, Dict
+from typing import List, Optional, Dict, Tuple
 
 from loguru import logger
 from contextlib import asynccontextmanager
@@ -9,7 +9,6 @@ from fastapi import FastAPI, HTTPException, Request, Query, Path
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, Response,JSONResponse, PlainTextResponse
 from fastapi.exceptions import RequestValidationError, StarletteHTTPException
-from pydantic import BaseModel, Field
 
 from fileglancer_central import database as db
 from fileglancer_central.model import FileSharePath, FileSharePathResponse, Ticket, ProxiedPath
@@ -54,7 +53,7 @@ def cache_wiki_paths(confluence_url, confluence_token, force_refresh=False):
         
 
 
-def _get_file_proxy_client(sharing_key: str, sharing_name: str) -> FileProxyClient | Response:
+def _get_file_proxy_client(sharing_key: str, sharing_name: str) -> Tuple[FileProxyClient, UserContext] | Tuple[Response, None]:
     with db.get_db_session() as session:
         proxied_path = db.get_proxied_path_by_sharing_key(session, sharing_key)
         if not proxied_path:
