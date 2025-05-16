@@ -1,7 +1,7 @@
 import os
 import sys
 from datetime import datetime
-from typing import Annotated, List, Optional, Dict
+from typing import List, Optional, Dict, Tuple
 
 from loguru import logger
 from contextlib import asynccontextmanager
@@ -9,7 +9,6 @@ from fastapi import FastAPI, HTTPException, Request, Query, Path
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, Response,JSONResponse, PlainTextResponse
 from fastapi.exceptions import RequestValidationError, StarletteHTTPException
-from pydantic import BaseModel, Field
 
 from fileglancer_central import database as db
 from fileglancer_central.model import FileSharePath, FileSharePathResponse, Ticket, ProxiedPath
@@ -17,6 +16,7 @@ from fileglancer_central.settings import get_settings
 from fileglancer_central.wiki import get_wiki_table, convert_table_to_file_share_paths
 from fileglancer_central.issues import create_jira_ticket, get_jira_ticket_details, delete_jira_ticket
 from fileglancer_central.utils import slugify_path
+from fileglancer_central.usercontext import UserContext
 
 from x2s3.utils import get_read_access_acl, get_nosuchbucket_response, get_error_response
 from x2s3.client_file import FileProxyClient
@@ -53,14 +53,14 @@ def cache_wiki_paths(confluence_url, confluence_token, force_refresh=False):
         
 
 
-def get_file_proxy_client(sharing_key: str, sharing_name: str) -> FileProxyClient | Response:
+def _get_file_proxy_client(sharing_key: str, sharing_name: str) -> Tuple[FileProxyClient, UserContext] | Tuple[Response, None]:
     with db.get_db_session() as session:
         proxied_path = db.get_proxied_path_by_sharing_key(session, sharing_key)
         if not proxied_path:
-            return get_nosuchbucket_response(sharing_name)
+            return get_nosuchbucket_response(sharing_name), None
         if proxied_path.sharing_name != sharing_name:
-            return get_error_response(400, "InvalidArgument", f"Sharing name mismatch for sharing key {sharing_key}", sharing_name)
-        return FileProxyClient(proxy_kwargs={'target_name': sharing_name}, path=proxied_path.mount_path)
+            return get_error_response(400, "InvalidArgument", f"Sharing name mismatch for sharing key {sharing_key}", sharing_name), None
+        return FileProxyClient(proxy_kwargs={'target_name': sharing_name}, path=proxied_path.mount_path), UserContext(proxied_path.username)
 
 
 def create_app(settings):
@@ -306,32 +306,34 @@ def create_app(settings):
         if 'acl' in request.query_params:
             return get_read_access_acl()
 
-        client = get_file_proxy_client(sharing_key, sharing_name)
+        client, userctx = _get_file_proxy_client(sharing_key, sharing_name)
         if isinstance(client, Response):
             return client
         
         if list_type:
             if list_type == 2:
-                return await client.list_objects_v2(continuation_token, delimiter, \
-                    encoding_type, fetch_owner, max_keys, prefix, start_after)
+                with userctx:
+                    return await client.list_objects_v2(continuation_token, delimiter, \
+                        encoding_type, fetch_owner, max_keys, prefix, start_after)
             else:
                 return get_error_response(400, "InvalidArgument", f"Invalid list type {list_type}", path)
         else:
             range_header = request.headers.get("range")
-            return await client.get_object(path, range_header)
+            with userctx:
+                return await client.get_object(path, range_header)
 
 
     @app.head("/files/{sharing_key}/{sharing_name}/{path:path}")
     async def head_object(sharing_key: str, sharing_name: str, path: str):
         try:
-            client = get_file_proxy_client(sharing_key, sharing_name)
+            client, userctx = _get_file_proxy_client(sharing_key, sharing_name)
             if isinstance(client, Response):
                 return client
-            return await client.head_object(path)
+            with userctx:
+                return await client.head_object(path)
         except:
             logger.opt(exception=sys.exc_info()).info("Error requesting head")
             return get_error_response(500, "InternalError", "Error requesting HEAD", path)
-
 
     return app
 
