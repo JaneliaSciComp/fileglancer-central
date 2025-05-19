@@ -4,8 +4,22 @@ import pwd
 from loguru import logger
 
 
-class UserContext:
-    def __init__(self, username):
+class ProxyContext:
+    """
+    Base no-op proxy context that does nothing.
+    """
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        return False
+
+
+class AccessFlagsProxyContext(ProxyContext):
+    """
+    A context manager for setting the user and group context for a process using seteuid/setegid access flags.
+    """
+    def __init__(self, username: str):
         self.username = username
         self._uid = os.getuid()
         self._gid = os.getgid()
@@ -65,16 +79,3 @@ class UserContext:
             os.setgroups(self._gids)
         self._user = None
         return False
-
-
-def main():
-    import sys
-    u = sys.argv[1]
-    d = sys.argv[2]
-
-    with UserContext(u):
-        print(os.listdir(d))
-    
-
-if __name__ == "__main__":
-    main()

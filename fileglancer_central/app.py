@@ -16,7 +16,7 @@ from fileglancer_central.settings import get_settings
 from fileglancer_central.wiki import get_wiki_table, convert_table_to_file_share_paths
 from fileglancer_central.issues import create_jira_ticket, get_jira_ticket_details, delete_jira_ticket
 from fileglancer_central.utils import slugify_path
-from fileglancer_central.usercontext import UserContext
+from fileglancer_central.proxy_context import ProxyContext, AccessFlagsProxyContext
 
 from x2s3.utils import get_read_access_acl, get_nosuchbucket_response, get_error_response
 from x2s3.client_file import FileProxyClient
@@ -52,18 +52,25 @@ def cache_wiki_paths(confluence_url, confluence_token, force_refresh=False):
         ) for path in db.get_all_paths(session)]
         
 
-
-def _get_file_proxy_client(sharing_key: str, sharing_name: str) -> Tuple[FileProxyClient, UserContext] | Tuple[Response, None]:
-    with db.get_db_session() as session:
-        proxied_path = db.get_proxied_path_by_sharing_key(session, sharing_key)
-        if not proxied_path:
-            return get_nosuchbucket_response(sharing_name), None
-        if proxied_path.sharing_name != sharing_name:
-            return get_error_response(400, "InvalidArgument", f"Sharing name mismatch for sharing key {sharing_key}", sharing_name), None
-        return FileProxyClient(proxy_kwargs={'target_name': sharing_name}, path=proxied_path.mount_path), UserContext(proxied_path.username)
-
-
 def create_app(settings):
+
+    def _get_file_proxy_client(sharing_key: str, sharing_name: str) -> Tuple[FileProxyClient, ProxyContext] | Tuple[Response, None]:
+        with db.get_db_session() as session:
+
+            proxied_path = db.get_proxied_path_by_sharing_key(session, sharing_key)
+            if not proxied_path:
+                return get_nosuchbucket_response(sharing_name), None
+            if proxied_path.sharing_name != sharing_name:
+                return get_error_response(400, "InvalidArgument", f"Sharing name mismatch for sharing key {sharing_key}", sharing_name), None
+            
+            # Create the appropriate proxy context based on the settings
+            if settings.use_access_flags:
+                proxy_context = AccessFlagsProxyContext(proxied_path.username)
+            else:
+                proxy_context = ProxyContext()
+
+            return FileProxyClient(proxy_kwargs={'target_name': sharing_name}, path=proxied_path.mount_path), proxy_context
+
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -72,12 +79,12 @@ def create_app(settings):
         logger.remove()
         logger.add(sys.stderr, level=settings.log_level)
 
-        logger.info(f"Settings:")
-        logger.info(f"  log_level: {settings.log_level}")
-        logger.info(f"  db_url: {settings.db_url}")
-        logger.info(f"  confluence_url: {settings.confluence_url}")
-        logger.info(f"  jira_url: {settings.jira_url}")
-        
+        logger.trace(f"Settings:")
+        logger.trace(f"  log_level: {settings.log_level}")
+        logger.trace(f"  db_url: {settings.db_url}")
+        logger.trace(f"  use_access_flags: {settings.use_access_flags}")
+        logger.trace(f"  confluence_url: {settings.confluence_url}")
+        logger.trace(f"  jira_url: {settings.jira_url}")
         logger.info(f"Server ready")
         yield
         # Cleanup (if needed)
@@ -306,30 +313,30 @@ def create_app(settings):
         if 'acl' in request.query_params:
             return get_read_access_acl()
 
-        client, userctx = _get_file_proxy_client(sharing_key, sharing_name)
+        client, ctx = _get_file_proxy_client(sharing_key, sharing_name)
         if isinstance(client, Response):
             return client
         
         if list_type:
             if list_type == 2:
-                with userctx:
+                with ctx:
                     return await client.list_objects_v2(continuation_token, delimiter, \
                         encoding_type, fetch_owner, max_keys, prefix, start_after)
             else:
                 return get_error_response(400, "InvalidArgument", f"Invalid list type {list_type}", path)
         else:
             range_header = request.headers.get("range")
-            with userctx:
+            with ctx:
                 return await client.get_object(path, range_header)
 
 
     @app.head("/files/{sharing_key}/{sharing_name}/{path:path}")
     async def head_object(sharing_key: str, sharing_name: str, path: str):
         try:
-            client, userctx = _get_file_proxy_client(sharing_key, sharing_name)
+            client, ctx = _get_file_proxy_client(sharing_key, sharing_name)
             if isinstance(client, Response):
                 return client
-            with userctx:
+            with ctx:
                 return await client.head_object(path)
         except:
             logger.opt(exception=sys.exc_info()).info("Error requesting head")
