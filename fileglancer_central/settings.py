@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     log_level: str = 'DEBUG'
     db_url: str = 'sqlite:///fileglancer.db'
 
+    # If true, use seteuid/setegid for file access
+    use_access_flags: bool = False
+
     # Confluence settings for getting the institutional file share paths
     confluence_url: Optional[HttpUrl] = None
     confluence_token: Optional[str] = None

@@ -8,6 +8,11 @@ log_level: INFO
 #
 db_url: sqlite:///fileglancer.db
 
+# 
+# If true, use seteuid/setegid for file access
+#
+use_access_flags: True
+
 #
 # File share mount paths to view in the UI. 
 # (this setting is ignored if confluence_url is set below)
