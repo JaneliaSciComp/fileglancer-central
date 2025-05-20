@@ -111,6 +111,7 @@ class UserPreference(BaseModel):
         description="The value of the preference"
     )
 
+
 class ProxiedPath(BaseModel):
     """A proxied path which is used to share a file system path via a URL"""
     username: str = Field(
@@ -124,4 +125,10 @@ class ProxiedPath(BaseModel):
     )
     mount_path: str = Field(
         description="The root path on the file system to be proxied"
+    )
+
+
+class ProxiedPathResponse(BaseModel):
+    paths: List[ProxiedPath] = Field(
+        description="A list of proxied paths"
     )

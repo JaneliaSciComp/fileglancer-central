@@ -11,7 +11,7 @@ from fastapi.responses import RedirectResponse, Response,JSONResponse, PlainText
 from fastapi.exceptions import RequestValidationError, StarletteHTTPException
 
 from fileglancer_central import database as db
-from fileglancer_central.model import FileSharePath, FileSharePathResponse, Ticket, ProxiedPath
+from fileglancer_central.model import FileSharePath, FileSharePathResponse, Ticket, ProxiedPath, ProxiedPathResponse
 from fileglancer_central.settings import get_settings
 from fileglancer_central.wiki import get_wiki_table, convert_table_to_file_share_paths
 from fileglancer_central.issues import create_jira_ticket, get_jira_ticket_details, delete_jira_ticket
@@ -240,11 +240,18 @@ def create_app(settings):
             )
         
 
-    @app.get("/proxied-path/{username}", response_model=List[ProxiedPath],
+    @app.get("/proxied-path/{username}", response_model=ProxiedPathResponse,
              description="Retrieve all proxied paths for a user")
     async def get_proxied_paths(username: str = Path(..., description="The username of the user who owns the proxied paths")):
         with db.get_db_session() as session:
-            return db.get_all_proxied_paths(session, username)
+            db_proxied_paths = db.get_all_proxied_paths(session, username)
+            proxied_paths = [ProxiedPath(
+                username=db_proxied_path.username,
+                sharing_key=db_proxied_path.sharing_key,
+                sharing_name=db_proxied_path.sharing_name,
+                mount_path=db_proxied_path.mount_path
+            ) for db_proxied_path in db_proxied_paths]
+            return ProxiedPathResponse(paths=proxied_paths)
 
 
     @app.get("/proxied-path/{username}/{sharing_key}", response_model=ProxiedPath,
