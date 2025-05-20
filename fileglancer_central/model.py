@@ -12,9 +12,6 @@ class FileSharePath(BaseModel):
     zone: str = Field(
         description="The zone of the file share, for grouping paths in the UI."
     )
-    owner: str = Field(
-        description="The owner of the file share."
-    )
     group: Optional[str] = Field(
         description="The group that owns the file share",
         default=None
