@@ -28,6 +28,9 @@ Then run the development server:
 ```bash
 pixi run dev-launch
 ```
+## Production install
+
+See [fileglancer-hub](https://github.com/JaneliaSciComp/fileglancer-hub) for details on production releases.
 
 ### Optional: configure file share path source
 
