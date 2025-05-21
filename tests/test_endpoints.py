@@ -102,8 +102,10 @@ def test_get_proxied_paths(test_client, temp_dir):
     response = test_client.get(f"/proxied-path/testuser")
     assert response.status_code == 200
     data = response.json()
-    assert isinstance(data, list)
-    assert len(data) > 1
+    assert isinstance(data, dict)
+    assert "paths" in data
+    assert isinstance(data["paths"], list)
+    assert len(data["paths"]) > 1
 
 
 def test_update_proxied_path(test_client, temp_dir):
