@@ -1251,8 +1251,8 @@ packages:
   requires_python: '>=3.8'
 - pypi: .
   name: fileglancer-central
-  version: 0.2.0
-  sha256: f438b4a4162071a6c1adb32e1fb453a1872887e5f2fce43e9ba0ee7bba9e9881
+  version: 0.3.0
+  sha256: 840af14632dd3092ffca360bff214fedded60f15b89a71cfe6c44b2d7aa84924
   requires_dist:
   - fastapi>=0.115
   - uvicorn>=0.34

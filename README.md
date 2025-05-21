@@ -79,3 +79,25 @@ export VERSION=<version>
 docker buildx build --platform linux/amd64,linux/arm64 --build-arg GIT_TAG=$VERSION -t ghcr.io/janeliascicomp/fileglancer-central:$VERSION -t ghcr.io/janeliascicomp/fileglancer-central:latest --push .
 ```
 
+## Release
+
+
+Before generating a package, you first need to install some tools:
+
+```bash
+pixi run pip install build twine hatch
+```
+
+To create a Python source package (`.tar.gz`) and the binary package (`.whl`) in the `dist/` directory, do:
+
+```bash
+pixi run pypi-build
+```
+
+To upload the package to the PyPI, you'll need one of the project owners to add you as a collaborator. After setting up your access token, do:
+
+```bash
+pixi run twine upload dist/*
+```
+
+The new version should now be [available on PyPI](https://pypi.org/project/fileglancer-central/).
