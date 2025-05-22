@@ -63,7 +63,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/ptyprocess-0.7.0-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pure_eval-0.2.3-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pygments-2.19.1-pyhd8ed1ab_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/pymysql-1.1.1-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/python-3.12.9-h9e4cc4f_0_cpython.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/python-dateutil-2.9.0.post0-pyhff2d567_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/python_abi-3.12-5_cp312.conda
@@ -181,7 +180,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/ptyprocess-0.7.0-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pure_eval-0.2.3-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pygments-2.19.1-pyhd8ed1ab_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/pymysql-1.1.1-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/python-3.12.9-h9ccd52b_0_cpython.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/python-dateutil-2.9.0.post0-pyhff2d567_1.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/python_abi-3.12-5_cp312.conda
@@ -299,7 +297,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/ptyprocess-0.7.0-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pure_eval-0.2.3-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pygments-2.19.1-pyhd8ed1ab_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/pymysql-1.1.1-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/python-3.12.9-hc22306f_0_cpython.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/python-dateutil-2.9.0.post0-pyhff2d567_1.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/python_abi-3.12-5_cp312.conda
@@ -432,7 +429,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/ptyprocess-0.7.0-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pure_eval-0.2.3-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pygments-2.19.1-pyhd8ed1ab_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/pymysql-1.1.1-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/python-3.12.9-h9e4cc4f_0_cpython.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/python-dateutil-2.9.0.post0-pyhff2d567_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/python_abi-3.12-5_cp312.conda
@@ -558,7 +554,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/ptyprocess-0.7.0-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pure_eval-0.2.3-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pygments-2.19.1-pyhd8ed1ab_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/pymysql-1.1.1-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/python-3.12.9-h9ccd52b_0_cpython.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/python-dateutil-2.9.0.post0-pyhff2d567_1.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/python_abi-3.12-5_cp312.conda
@@ -684,7 +679,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/ptyprocess-0.7.0-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pure_eval-0.2.3-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pygments-2.19.1-pyhd8ed1ab_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/pymysql-1.1.1-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/python-3.12.9-hc22306f_0_cpython.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/python-dateutil-2.9.0.post0-pyhff2d567_1.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/python_abi-3.12-5_cp312.conda
@@ -1340,7 +1334,7 @@ packages:
 - pypi: .
   name: fileglancer-central
   version: 0.3.0
-  sha256: 992e25eb191bab41e73f2a342b32c5f015e5b106676a9971c064de4aff27921a
+  sha256: 5a31ee204b4ea935a6b3f71f551a1bd2f50170d3ab83c91d095677609660f0ad
   requires_dist:
   - fastapi>=0.115
   - uvicorn>=0.34
@@ -2891,17 +2885,6 @@ packages:
   - pkg:pypi/pygments?source=hash-mapping
   size: 888600
   timestamp: 1736243563082
-- conda: https://conda.anaconda.org/conda-forge/noarch/pymysql-1.1.1-pyhd8ed1ab_1.conda
-  sha256: c06d7723a1309fd93b108f9eaee7a4f11bb21a4fe71937830b145a5f9d2cacf1
-  md5: 315255aed31d5ac5ae5af9aff21a7bf6
-  depends:
-  - python >=3.9
-  license: MIT
-  license_family: MIT
-  purls:
-  - pkg:pypi/pymysql?source=hash-mapping
-  size: 44283
-  timestamp: 1734209963958
 - pypi: https://files.pythonhosted.org/packages/11/92/76a1c94d3afee238333bc0a42b82935dd8f9cf8ce9e336ff87ee14d9e1cf/pytest-8.3.4-py3-none-any.whl
   name: pytest
   version: 8.3.4
