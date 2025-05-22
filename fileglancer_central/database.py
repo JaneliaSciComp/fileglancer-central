@@ -15,14 +15,14 @@ class FileSharePathDB(Base):
     """Database model for storing file share paths"""
     __tablename__ = 'file_share_paths'
     id = Column(Integer, primary_key=True, autoincrement=True)
-    name = Column(String(255), index=True, unique=True)
-    zone = Column(String(255))
-    group = Column(String(255))
-    storage = Column(String(255))
-    mount_path = Column(String(2048))
-    mac_path = Column(String(2048))
-    windows_path = Column(String(2048))
-    linux_path = Column(String(2048))
+    name = Column(String, index=True, unique=True)
+    zone = Column(String)
+    group = Column(String)
+    storage = Column(String)
+    mount_path = Column(String)
+    mac_path = Column(String)
+    windows_path = Column(String)
+    linux_path = Column(String)
 
 
 class LastRefreshDB(Base):
@@ -38,8 +38,8 @@ class UserPreferenceDB(Base):
     __tablename__ = 'user_preferences'
 
     id = Column(Integer, primary_key=True)
-    username = Column(String(20), nullable=False)
-    key = Column(String(20), nullable=False)
+    username = Column(String, nullable=False)
+    key = Column(String, nullable=False)
     value = Column(JSON, nullable=False)
 
     __table_args__ = (
@@ -52,10 +52,10 @@ class ProxiedPathDB(Base):
     __tablename__ = 'proxied_paths'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    username = Column(String(20), nullable=False)
-    sharing_key = Column(String(20), nullable=False, unique=True)
-    sharing_name = Column(String(255), nullable=False)
-    mount_path = Column(String(255), nullable=False)
+    username = Column(String, nullable=False)
+    sharing_key = Column(String, nullable=False, unique=True)
+    sharing_name = Column(String, nullable=False)
+    mount_path = Column(String, nullable=False)
 
     __table_args__ = (
         UniqueConstraint('username', 'mount_path', name='uq_proxied_path'),
