@@ -23,7 +23,7 @@ class FileSharePathDB(Base):
     mac_path = Column(String)
     windows_path = Column(String)
     linux_path = Column(String)
-    
+
 
 class LastRefreshDB(Base):
     """Database model for storing the last refresh time of the file share paths"""
@@ -39,7 +39,7 @@ class UserPreferenceDB(Base):
 
     id = Column(Integer, primary_key=True)
     username = Column(String, nullable=False)
-    key = Column(String, nullable=False) 
+    key = Column(String, nullable=False)
     value = Column(JSON, nullable=False)
 
     __table_args__ = (
@@ -50,11 +50,13 @@ class UserPreferenceDB(Base):
 class ProxiedPathDB(Base):
     """Database model for storing proxied paths"""
     __tablename__ = 'proxied_paths'
+
     id = Column(Integer, primary_key=True, autoincrement=True)
     username = Column(String, nullable=False)
     sharing_key = Column(String, nullable=False, unique=True)
     sharing_name = Column(String, nullable=False)
     mount_path = Column(String, nullable=False)
+
     __table_args__ = (
         UniqueConstraint('username', 'mount_path', name='uq_proxied_path'),
     )
