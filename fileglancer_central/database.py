@@ -180,9 +180,12 @@ def get_all_user_preferences(session: Session, username: str) -> Dict[str, Dict]
     return {pref.key: pref.value for pref in prefs}
 
 
-def get_all_proxied_paths(session: Session, username: str) -> List[ProxiedPathDB]:
-    """Get all proxied paths for a user"""
-    return session.query(ProxiedPathDB).filter_by(username=username).all()
+def get_proxied_paths(session: Session, username: str, mount_path: str = None) -> List[ProxiedPathDB]:
+    """Get proxied paths for a user, optionally filtered by mount path"""
+    if mount_path:
+        return session.query(ProxiedPathDB).filter_by(username=username, mount_path=mount_path).all()
+    else:
+        return session.query(ProxiedPathDB).filter_by(username=username).all()
 
 
 def get_proxied_path_by_sharing_key(session: Session, sharing_key: str) -> Optional[ProxiedPathDB]:

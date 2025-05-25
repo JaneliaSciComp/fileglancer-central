@@ -248,10 +248,11 @@ def create_app(settings):
         
 
     @app.get("/proxied-path/{username}", response_model=ProxiedPathResponse,
-             description="Retrieve all proxied paths for a user")
-    async def get_proxied_paths(username: str = Path(..., description="The username of the user who owns the proxied paths")):
+             description="Query proxied paths for a user")
+    async def get_proxied_paths(username: str = Path(..., description="The username of the user who owns the proxied paths"),
+                                mount_path: str = Query(None, description="The mount path being proxied")):
         with db.get_db_session() as session:
-            db_proxied_paths = db.get_all_proxied_paths(session, username)
+            db_proxied_paths = db.get_proxied_paths(session, username, mount_path)
             proxied_paths = [ProxiedPath(
                 username=db_proxied_path.username,
                 sharing_key=db_proxied_path.sharing_key,
