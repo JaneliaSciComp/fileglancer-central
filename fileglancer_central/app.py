@@ -22,7 +22,7 @@ from x2s3.utils import get_read_access_acl, get_nosuchbucket_response, get_error
 from x2s3.client_file import FileProxyClient
 
 
-def cache_wiki_paths(confluence_url, confluence_token, force_refresh=False):
+def _cache_wiki_paths(confluence_url, confluence_token, force_refresh=False):
     with db.get_db_session() as session:
         # Get the last refresh time from the database
         last_refresh = db.get_last_refresh(session)
@@ -50,7 +50,19 @@ def cache_wiki_paths(confluence_url, confluence_token, force_refresh=False):
             windows_path=path.windows_path,
             linux_path=path.linux_path,
         ) for path in db.get_all_paths(session)]
-        
+    
+
+def _convert_proxied_path(db_path: db.ProxiedPathDB) -> ProxiedPath:
+    """Convert a database ProxiedPathDB model to a Pydantic ProxiedPath model"""
+    return ProxiedPath(
+        username=db_path.username,
+        sharing_key=db_path.sharing_key,
+        sharing_name=db_path.sharing_name,
+        mount_path=db_path.mount_path,
+        created_at=db_path.created_at,
+        updated_at=db_path.updated_at
+    )
+
 
 def create_app(settings):
 
@@ -133,7 +145,7 @@ def create_app(settings):
             raise HTTPException(status_code=500, detail="Confluence is not configured")
         
         if confluence_url and confluence_token:
-            paths = cache_wiki_paths(confluence_url, confluence_token, force_refresh)
+            paths = _cache_wiki_paths(confluence_url, confluence_token, force_refresh)
         else:
             paths = [FileSharePath(
                 name=slugify_path(path),
@@ -239,12 +251,7 @@ def create_app(settings):
 
         with db.get_db_session() as session:
             new_path = db.create_proxied_path(session, username, sharing_name, mount_path)
-            return ProxiedPath(
-                username=new_path.username,
-                sharing_key=new_path.sharing_key,
-                sharing_name=new_path.sharing_name,
-                mount_path=new_path.mount_path
-            )
+            return _convert_proxied_path(new_path)
         
 
     @app.get("/proxied-path/{username}", response_model=ProxiedPathResponse,
@@ -253,12 +260,7 @@ def create_app(settings):
                                 mount_path: str = Query(None, description="The mount path being proxied")):
         with db.get_db_session() as session:
             db_proxied_paths = db.get_proxied_paths(session, username, mount_path)
-            proxied_paths = [ProxiedPath(
-                username=db_proxied_path.username,
-                sharing_key=db_proxied_path.sharing_key,
-                sharing_name=db_proxied_path.sharing_name,
-                mount_path=db_proxied_path.mount_path
-            ) for db_proxied_path in db_proxied_paths]
+            proxied_paths = [_convert_proxied_path(db_path) for db_path in db_proxied_paths]
             return ProxiedPathResponse(paths=proxied_paths)
 
 
@@ -272,7 +274,7 @@ def create_app(settings):
                 raise HTTPException(status_code=404, detail="Proxied path not found")
             if path.username != username:
                 raise HTTPException(status_code=404, detail="Proxied path not found for user {username}")
-            return path
+            return _convert_proxied_path(path)
 
 
     @app.put("/proxied-path/{username}/{sharing_key}", description="Update a proxied path by sharing key")
@@ -285,12 +287,7 @@ def create_app(settings):
                 if not os.path.exists(mount_path):
                     raise HTTPException(status_code=400, detail="Given mount path does not exist")
             updated = db.update_proxied_path(session, username, sharing_key, new_mount_path=mount_path, new_sharing_name=sharing_name)
-            return ProxiedPath(
-                username=updated.username,
-                sharing_key=updated.sharing_key,
-                sharing_name=updated.sharing_name,
-                mount_path=updated.mount_path
-            )
+            return _convert_proxied_path(updated)
 
 
     @app.delete("/proxied-path/{username}/{sharing_key}", description="Delete a proxied path by sharing key")

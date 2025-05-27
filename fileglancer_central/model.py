@@ -123,6 +123,12 @@ class ProxiedPath(BaseModel):
     mount_path: str = Field(
         description="The root path on the file system to be proxied"
     )
+    created_at: datetime = Field(
+        description="When this proxied path was created"
+    )
+    updated_at: datetime = Field(
+        description="When this proxied path was last updated"
+    )
 
 
 class ProxiedPathResponse(BaseModel):

@@ -1,5 +1,5 @@
 import secrets
-from datetime import datetime
+from datetime import datetime, UTC
 
 from sqlalchemy import create_engine, Column, String, Integer, DateTime, JSON, UniqueConstraint
 from sqlalchemy.orm import sessionmaker, declarative_base, Session
@@ -56,6 +56,8 @@ class ProxiedPathDB(Base):
     sharing_key = Column(String, nullable=False, unique=True)
     sharing_name = Column(String, nullable=False)
     mount_path = Column(String, nullable=False)
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(UTC))
+    updated_at = Column(DateTime, nullable=False, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 
     __table_args__ = (
         UniqueConstraint('username', 'mount_path', name='uq_proxied_path'),
@@ -125,7 +127,7 @@ def update_file_share_paths(session, paths, table_last_updated, max_paths_to_del
 
     # Update last refresh time
     session.query(LastRefreshDB).delete()
-    session.add(LastRefreshDB(source_last_updated=table_last_updated, db_last_updated=datetime.now()))
+    session.add(LastRefreshDB(source_last_updated=table_last_updated, db_last_updated=datetime.now(UTC)))
 
     session.commit()
 
@@ -196,7 +198,15 @@ def get_proxied_path_by_sharing_key(session: Session, sharing_key: str) -> Optio
 def create_proxied_path(session: Session, username: str, sharing_name: str, mount_path: str) -> ProxiedPathDB:
     """Create a new proxied path"""
     sharing_key = secrets.token_urlsafe(6)
-    session.add(ProxiedPathDB(username=username, sharing_key=sharing_key, sharing_name=sharing_name, mount_path=mount_path))
+    now = datetime.now(UTC)
+    session.add(ProxiedPathDB(
+        username=username, 
+        sharing_key=sharing_key, 
+        sharing_name=sharing_name, 
+        mount_path=mount_path,
+        created_at=now,
+        updated_at=now
+    ))
     session.commit()
     return get_proxied_path_by_sharing_key(session, sharing_key)
     
