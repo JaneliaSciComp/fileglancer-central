@@ -244,8 +244,12 @@ def create_app(settings):
                                   mount_path: str = Query(..., description="The root path on the file system to be proxied")):
 
         # Verify that we can access the sharing path
-        if not os.path.exists(mount_path):
+        try:
+            os.listdir(mount_path)
+        except FileNotFoundError:
             raise HTTPException(status_code=400, detail="Given mount path does not exist")
+        except PermissionError:
+            raise HTTPException(status_code=403, detail="Given mount path is not accessible")
 
         sharing_name = os.path.basename(mount_path)
 
