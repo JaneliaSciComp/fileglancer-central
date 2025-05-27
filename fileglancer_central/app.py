@@ -58,7 +58,8 @@ def _convert_proxied_path(db_path: db.ProxiedPathDB) -> ProxiedPath:
         username=db_path.username,
         sharing_key=db_path.sharing_key,
         sharing_name=db_path.sharing_name,
-        mount_path=db_path.mount_path,
+        fsp_mount_path=db_path.fsp_mount_path,
+        path=db_path.path,
         created_at=db_path.created_at,
         updated_at=db_path.updated_at
     )
@@ -81,7 +82,8 @@ def create_app(settings):
             else:
                 proxy_context = ProxyContext()
 
-            return FileProxyClient(proxy_kwargs={'target_name': sharing_name}, path=proxied_path.mount_path), proxy_context
+            mount_path = f"{proxied_path.fsp_mount_path}/{proxied_path.path}"
+            return FileProxyClient(proxy_kwargs={'target_name': sharing_name}, path=mount_path), proxy_context
 
 
     @asynccontextmanager
@@ -241,14 +243,14 @@ def create_app(settings):
     @app.post("/proxied-path/{username}", response_model=ProxiedPath,
               description="Create a new proxied path")
     async def create_proxied_path(username: str = Path(..., description="The username of the user who owns this proxied path"),
-                                  path: str = Query(..., description="The path relative to the file share path mount point"),
-                                  fsp_mount_path: str = Query(..., description="The mount path from the file share paths table that this proxied path is associated with")):
+                                  fsp_mount_path: str = Query(..., description="The mount path from the file share paths table that this proxied path is associated with"),
+                                  path: str = Query(..., description="The path relative to the file share path mount point")):
 
         sharing_name = os.path.basename(path)
-
+        logger.info(f"Creating proxied path for {username} with sharing name {sharing_name} and mount path {fsp_mount_path} and path {path}")
         with db.get_db_session() as session:
             try:
-                new_path = db.create_proxied_path(session, username, sharing_name, path, fsp_mount_path)
+                new_path = db.create_proxied_path(session, username, sharing_name, fsp_mount_path, path)
                 return _convert_proxied_path(new_path)
             except ValueError as e:
                 raise HTTPException(status_code=400, detail=str(e))
@@ -257,9 +259,10 @@ def create_app(settings):
     @app.get("/proxied-path/{username}", response_model=ProxiedPathResponse,
              description="Query proxied paths for a user")
     async def get_proxied_paths(username: str = Path(..., description="The username of the user who owns the proxied paths"),
+                                fsp_mount_path: str = Query(None, description="The mount path from the file share paths table that this proxied path is associated with"),
                                 path: str = Query(None, description="The path being proxied")):
         with db.get_db_session() as session:
-            db_proxied_paths = db.get_proxied_paths(session, username, path)
+            db_proxied_paths = db.get_proxied_paths(session, username, fsp_mount_path, path)
             proxied_paths = [_convert_proxied_path(db_path) for db_path in db_proxied_paths]
             return ProxiedPathResponse(paths=proxied_paths)
 
@@ -280,9 +283,9 @@ def create_app(settings):
     @app.put("/proxied-path/{username}/{sharing_key}", description="Update a proxied path by sharing key")
     async def update_proxied_path(username: str = Path(..., description="The username of the user who owns the proxied paths"),
                                   sharing_key: str = Path(..., description="The sharing key of the proxied path"),
+                                  fsp_mount_path: Optional[str] = Query(default=None, description="The mount path from the file share paths table"),
                                   path: Optional[str] = Query(default=None, description="The path relative to the file share path mount point"),
-                                  sharing_name: Optional[str] = Query(default=None, description="The sharing path of the proxied path"),
-                                  fsp_mount_path: Optional[str] = Query(default=None, description="The mount path from the file share paths table")):
+                                  sharing_name: Optional[str] = Query(default=None, description="The sharing path of the proxied path")):
         with db.get_db_session() as session:
             try:
                 updated = db.update_proxied_path(session, username, sharing_key, new_path=path, new_sharing_name=sharing_name, new_fsp_mount_path=fsp_mount_path)
