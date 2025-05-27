@@ -120,8 +120,11 @@ class ProxiedPath(BaseModel):
     sharing_name: str = Field(
         description="The sharing path is part of the URL proxy path. It is mainly used to provide file extension information to the client."
     )
-    mount_path: str = Field(
-        description="The root path on the file system to be proxied"
+    path: str = Field(
+        description="The path relative to the file share path mount point"
+    )
+    fsp_mount_path: str = Field(
+        description="The mount path from the file share paths table that this proxied path is associated with"
     )
     created_at: datetime = Field(
         description="When this proxied path was created"
