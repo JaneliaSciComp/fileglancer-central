@@ -1,5 +1,6 @@
 import secrets
-from datetime import datetime
+from datetime import datetime, UTC
+import os
 
 from sqlalchemy import create_engine, Column, String, Integer, DateTime, JSON, UniqueConstraint
 from sqlalchemy.orm import sessionmaker, declarative_base, Session
@@ -55,10 +56,13 @@ class ProxiedPathDB(Base):
     username = Column(String, nullable=False)
     sharing_key = Column(String, nullable=False, unique=True)
     sharing_name = Column(String, nullable=False)
-    mount_path = Column(String, nullable=False)
+    fsp_mount_path = Column(String, nullable=False)
+    path = Column(String, nullable=False)
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(UTC))
+    updated_at = Column(DateTime, nullable=False, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 
     __table_args__ = (
-        UniqueConstraint('username', 'mount_path', name='uq_proxied_path'),
+        UniqueConstraint('username', 'fsp_mount_path', 'path', name='uq_proxied_path'),
     )
 
 
@@ -125,7 +129,7 @@ def update_file_share_paths(session, paths, table_last_updated, max_paths_to_del
 
     # Update last refresh time
     session.query(LastRefreshDB).delete()
-    session.add(LastRefreshDB(source_last_updated=table_last_updated, db_last_updated=datetime.now()))
+    session.add(LastRefreshDB(source_last_updated=table_last_updated, db_last_updated=datetime.now(UTC)))
 
     session.commit()
 
@@ -180,10 +184,10 @@ def get_all_user_preferences(session: Session, username: str) -> Dict[str, Dict]
     return {pref.key: pref.value for pref in prefs}
 
 
-def get_proxied_paths(session: Session, username: str, mount_path: str = None) -> List[ProxiedPathDB]:
-    """Get proxied paths for a user, optionally filtered by mount path"""
-    if mount_path:
-        return session.query(ProxiedPathDB).filter_by(username=username, mount_path=mount_path).all()
+def get_proxied_paths(session: Session, username: str, path: str = None) -> List[ProxiedPathDB]:
+    """Get proxied paths for a user, optionally filtered by path"""
+    if path:
+        return session.query(ProxiedPathDB).filter_by(username=username, path=path).all()
     else:
         return session.query(ProxiedPathDB).filter_by(username=username).all()
 
@@ -193,10 +197,38 @@ def get_proxied_path_by_sharing_key(session: Session, sharing_key: str) -> Optio
     return session.query(ProxiedPathDB).filter_by(sharing_key=sharing_key).first()
 
 
-def create_proxied_path(session: Session, username: str, sharing_name: str, mount_path: str) -> ProxiedPathDB:
+def _validate_proxied_path(session: Session, path: str, fsp_mount_path: str) -> None:
+    """Validate a proxied path exists and is accessible"""
+    # Validate that the fsp_mount_path exists in file_share_paths
+    fsp = session.query(FileSharePathDB).filter_by(mount_path=fsp_mount_path).first()
+    if not fsp:
+        raise ValueError(f"File share path {fsp_mount_path} does not exist")
+
+    # Validate path exists and is accessible
+    absolute_path = os.path.join(fsp_mount_path, path.lstrip('/'))
+    try:
+        os.listdir(absolute_path)
+    except FileNotFoundError:
+        raise ValueError(f"Path {path} does not exist relative to {fsp_mount_path}")
+    except PermissionError:
+        raise ValueError(f"Path {path} is not accessible relative to {fsp_mount_path}")
+
+        
+def create_proxied_path(session: Session, username: str, sharing_name: str, fsp_mount_path: str, path: str) -> ProxiedPathDB:
     """Create a new proxied path"""
+    _validate_proxied_path(session, path, fsp_mount_path)
+
     sharing_key = secrets.token_urlsafe(6)
-    session.add(ProxiedPathDB(username=username, sharing_key=sharing_key, sharing_name=sharing_name, mount_path=mount_path))
+    now = datetime.now(UTC)
+    session.add(ProxiedPathDB(
+        username=username, 
+        sharing_key=sharing_key, 
+        sharing_name=sharing_name, 
+        path=path,
+        fsp_mount_path=fsp_mount_path,
+        created_at=now,
+        updated_at=now
+    ))
     session.commit()
     return get_proxied_path_by_sharing_key(session, sharing_key)
     
@@ -205,7 +237,8 @@ def update_proxied_path(session: Session,
                         username: str,
                         sharing_key: str, 
                         new_sharing_name: Optional[str] = None, 
-                        new_mount_path: Optional[str] = None) -> ProxiedPathDB:
+                        new_path: Optional[str] = None,
+                        new_fsp_mount_path: Optional[str] = None) -> ProxiedPathDB:
     """Update a proxied path"""
     proxied_path = get_proxied_path_by_sharing_key(session, sharing_key)
     if not proxied_path:
@@ -216,10 +249,18 @@ def update_proxied_path(session: Session,
 
     if new_sharing_name:
         proxied_path.sharing_name = new_sharing_name
-    if new_mount_path:
-        proxied_path.mount_path = new_mount_path
+        
+    if new_fsp_mount_path:
+        # Validate current path exists relative to new fsp_mount_path
+        _validate_proxied_path(session, proxied_path.path, new_fsp_mount_path)
+        proxied_path.fsp_mount_path = new_fsp_mount_path
+
+    if new_path:
+        # If updating path, validate it exists relative to the fsp_mount_path
+        _validate_proxied_path(session, new_path, proxied_path.fsp_mount_path)
+        proxied_path.path = new_path
+        
     session.commit()
-    
     return proxied_path
     
 

@@ -22,7 +22,7 @@ from x2s3.utils import get_read_access_acl, get_nosuchbucket_response, get_error
 from x2s3.client_file import FileProxyClient
 
 
-def cache_wiki_paths(confluence_url, confluence_token, force_refresh=False):
+def _cache_wiki_paths(confluence_url, confluence_token, force_refresh=False):
     with db.get_db_session() as session:
         # Get the last refresh time from the database
         last_refresh = db.get_last_refresh(session)
@@ -50,7 +50,19 @@ def cache_wiki_paths(confluence_url, confluence_token, force_refresh=False):
             windows_path=path.windows_path,
             linux_path=path.linux_path,
         ) for path in db.get_all_paths(session)]
-        
+    
+
+def _convert_proxied_path(db_path: db.ProxiedPathDB) -> ProxiedPath:
+    """Convert a database ProxiedPathDB model to a Pydantic ProxiedPath model"""
+    return ProxiedPath(
+        username=db_path.username,
+        sharing_key=db_path.sharing_key,
+        sharing_name=db_path.sharing_name,
+        mount_path=db_path.mount_path,
+        created_at=db_path.created_at,
+        updated_at=db_path.updated_at
+    )
+
 
 def create_app(settings):
 
@@ -133,7 +145,7 @@ def create_app(settings):
             raise HTTPException(status_code=500, detail="Confluence is not configured")
         
         if confluence_url and confluence_token:
-            paths = cache_wiki_paths(confluence_url, confluence_token, force_refresh)
+            paths = _cache_wiki_paths(confluence_url, confluence_token, force_refresh)
         else:
             paths = [FileSharePath(
                 name=slugify_path(path),
@@ -229,36 +241,26 @@ def create_app(settings):
     @app.post("/proxied-path/{username}", response_model=ProxiedPath,
               description="Create a new proxied path")
     async def create_proxied_path(username: str = Path(..., description="The username of the user who owns this proxied path"),
-                                  mount_path: str = Query(..., description="The root path on the file system to be proxied")):
+                                  path: str = Query(..., description="The path relative to the file share path mount point"),
+                                  fsp_mount_path: str = Query(..., description="The mount path from the file share paths table that this proxied path is associated with")):
 
-        # Verify that we can access the sharing path
-        if not os.path.exists(mount_path):
-            raise HTTPException(status_code=400, detail="Given mount path does not exist")
-
-        sharing_name = os.path.basename(mount_path)
+        sharing_name = os.path.basename(path)
 
         with db.get_db_session() as session:
-            new_path = db.create_proxied_path(session, username, sharing_name, mount_path)
-            return ProxiedPath(
-                username=new_path.username,
-                sharing_key=new_path.sharing_key,
-                sharing_name=new_path.sharing_name,
-                mount_path=new_path.mount_path
-            )
-        
+            try:
+                new_path = db.create_proxied_path(session, username, sharing_name, path, fsp_mount_path)
+                return _convert_proxied_path(new_path)
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=str(e))
+
 
     @app.get("/proxied-path/{username}", response_model=ProxiedPathResponse,
              description="Query proxied paths for a user")
     async def get_proxied_paths(username: str = Path(..., description="The username of the user who owns the proxied paths"),
-                                mount_path: str = Query(None, description="The mount path being proxied")):
+                                path: str = Query(None, description="The path being proxied")):
         with db.get_db_session() as session:
-            db_proxied_paths = db.get_proxied_paths(session, username, mount_path)
-            proxied_paths = [ProxiedPath(
-                username=db_proxied_path.username,
-                sharing_key=db_proxied_path.sharing_key,
-                sharing_name=db_proxied_path.sharing_name,
-                mount_path=db_proxied_path.mount_path
-            ) for db_proxied_path in db_proxied_paths]
+            db_proxied_paths = db.get_proxied_paths(session, username, path)
+            proxied_paths = [_convert_proxied_path(db_path) for db_path in db_proxied_paths]
             return ProxiedPathResponse(paths=proxied_paths)
 
 
@@ -272,25 +274,21 @@ def create_app(settings):
                 raise HTTPException(status_code=404, detail="Proxied path not found")
             if path.username != username:
                 raise HTTPException(status_code=404, detail="Proxied path not found for user {username}")
-            return path
+            return _convert_proxied_path(path)
 
 
     @app.put("/proxied-path/{username}/{sharing_key}", description="Update a proxied path by sharing key")
     async def update_proxied_path(username: str = Path(..., description="The username of the user who owns the proxied paths"),
                                   sharing_key: str = Path(..., description="The sharing key of the proxied path"),
-                                  mount_path: Optional[str] = Query(default=None, description="The root path on the file system to be proxied"),
-                                  sharing_name: Optional[str] = Query(default=None, description="The sharing path of the proxied path")):
+                                  path: Optional[str] = Query(default=None, description="The path relative to the file share path mount point"),
+                                  sharing_name: Optional[str] = Query(default=None, description="The sharing path of the proxied path"),
+                                  fsp_mount_path: Optional[str] = Query(default=None, description="The mount path from the file share paths table")):
         with db.get_db_session() as session:
-            if mount_path:
-                if not os.path.exists(mount_path):
-                    raise HTTPException(status_code=400, detail="Given mount path does not exist")
-            updated = db.update_proxied_path(session, username, sharing_key, new_mount_path=mount_path, new_sharing_name=sharing_name)
-            return ProxiedPath(
-                username=updated.username,
-                sharing_key=updated.sharing_key,
-                sharing_name=updated.sharing_name,
-                mount_path=updated.mount_path
-            )
+            try:
+                updated = db.update_proxied_path(session, username, sharing_key, new_path=path, new_sharing_name=sharing_name, new_fsp_mount_path=fsp_mount_path)
+                return _convert_proxied_path(updated)
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=str(e))
 
 
     @app.delete("/proxied-path/{username}/{sharing_key}", description="Delete a proxied path by sharing key")
