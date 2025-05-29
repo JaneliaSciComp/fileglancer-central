@@ -43,13 +43,11 @@ exclude = ["docker"]
 channels = ["conda-forge"]
 platforms = ["osx-arm64", "osx-64", "linux-64"]
 
-[tool.pixi.pypi-dependencies]
-fileglancer-central = { path = ".", editable = true }
-
 [tool.pixi.tasks]
+pypi-build = "python -m build"
 dev-install = "pip install -e ."
-dev-launch = "pixi run uvicorn fileglancer_central.app:app --host 0.0.0.0 --workers 1 --port 7878 --reload"
-pypi-build = { cmd = "python -m build" }
+dev-launch = "pixi run uvicorn fileglancer_central.app:app --port 7878 --reload"
+dev-launch-remote = "pixi run uvicorn fileglancer_central.app:app --host 0.0.0.0 --workers 1 --port 7878 --reload --ssl-keyfile /opt/certs/cert.key --ssl-certfile /opt/certs/cert.crt"
 
 [tool.pixi.feature.test.tasks]
 test = "pytest"
