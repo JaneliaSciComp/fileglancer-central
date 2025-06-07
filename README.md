@@ -69,7 +69,7 @@ The Fileglancer Central service is a backend service optionally used by Fileglan
 ## Running unit tests
 
 ```bash
-pixi run -e test pytest
+pixi run test
 ```
 
 ## Building the Docker container
