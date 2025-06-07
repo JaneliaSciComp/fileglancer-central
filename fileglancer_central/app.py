@@ -25,7 +25,7 @@ from x2s3.client_file import FileProxyClient
 
 
 def _cache_wiki_paths(confluence_url, confluence_token, force_refresh=False):
-    with db.get_db_session() as session:
+    with db.get_db_session(settings.db_url) as session:
         # Get the last refresh time from the database
         last_refresh = db.get_last_refresh(session)
 
@@ -75,12 +75,12 @@ def create_app(settings):
         if settings.file_share_mounts:
             return {fsp.name: fsp.mount_path for fsp in settings.file_share_mounts}
         else:
-            with db.get_db_session() as session:
+            with db.get_db_session(settings.db_url) as session:
                 return {fsp.name: fsp.mount_path for fsp in db.get_all_paths(session)}
         
         
     def _get_file_proxy_client(sharing_key: str, sharing_name: str) -> Tuple[FileProxyClient, ProxyContext] | Tuple[Response, None]:
-        with db.get_db_session() as session:
+        with db.get_db_session(settings.db_url) as session:
 
             proxied_path = db.get_proxied_path_by_sharing_key(session, sharing_key)
             if not proxied_path:
@@ -224,14 +224,14 @@ def create_app(settings):
     @app.get("/preference/{username}", response_model=Dict[str, Dict],
              description="Get all preferences for a user")
     async def get_preferences(username: str):
-        with db.get_db_session() as session:
+        with db.get_db_session(settings.db_url) as session:
             return db.get_all_user_preferences(session, username)
 
 
     @app.get("/preference/{username}/{key}", response_model=Optional[Dict],
              description="Get a specific preference for a user")
     async def get_preference(username: str, key: str):
-        with db.get_db_session() as session:
+        with db.get_db_session(settings.db_url) as session:
             pref = db.get_user_preference(session, username, key)
             if pref is None:
                 raise HTTPException(status_code=404, detail="Preference not found")
@@ -241,7 +241,7 @@ def create_app(settings):
     @app.put("/preference/{username}/{key}",
              description="Set a preference for a user")
     async def set_preference(username: str, key: str, value: Dict):
-        with db.get_db_session() as session:
+        with db.get_db_session(settings.db_url) as session:
             db.set_user_preference(session, username, key, value)
             return {"message": f"Preference {key} set for user {username}"}
 
@@ -249,7 +249,7 @@ def create_app(settings):
     @app.delete("/preference/{username}/{key}",
                 description="Delete a preference for a user")
     async def delete_preference(username: str, key: str):
-        with db.get_db_session() as session:
+        with db.get_db_session(settings.db_url) as session:
             deleted = db.delete_user_preference(session, username, key)
             if not deleted:
                 raise HTTPException(status_code=404, detail="Preference not found")
@@ -264,7 +264,7 @@ def create_app(settings):
 
         sharing_name = os.path.basename(path)
         logger.info(f"Creating proxied path for {username} with sharing name {sharing_name} and fsp_name {fsp_name} and path {path}")
-        with db.get_db_session() as session:
+        with db.get_db_session(settings.db_url) as session:
             try:
                 new_path = db.create_proxied_path(session, username, sharing_name, fsp_name, path)
                 return _convert_proxied_path(new_path)
@@ -277,7 +277,7 @@ def create_app(settings):
     async def get_proxied_paths(username: str = Path(..., description="The username of the user who owns the proxied paths"),
                                 fsp_name: str = Query(None, description="The name of the file share path that this proxied path is associated with"),
                                 path: str = Query(None, description="The path being proxied")):
-        with db.get_db_session() as session:
+        with db.get_db_session(settings.db_url) as session:
             db_proxied_paths = db.get_proxied_paths(session, username, fsp_name, path)
             proxied_paths = [_convert_proxied_path(db_path) for db_path in db_proxied_paths]
             return ProxiedPathResponse(paths=proxied_paths)
@@ -287,7 +287,7 @@ def create_app(settings):
              description="Retrieve a proxied path by sharing key")
     async def get_proxied_path(username: str = Path(..., description="The username of the user who owns the proxied paths"),
                                sharing_key: str = Path(..., description="The sharing key of the proxied path")):
-        with db.get_db_session() as session:
+        with db.get_db_session(settings.db_url) as session:
             path = db.get_proxied_path_by_sharing_key(session, sharing_key)
             if not path:
                 raise HTTPException(status_code=404, detail="Proxied path not found")
@@ -302,7 +302,7 @@ def create_app(settings):
                                   fsp_name: Optional[str] = Query(default=None, description="The name of the file share path that this proxied path is associated with"),
                                   path: Optional[str] = Query(default=None, description="The path relative to the file share path mount point"),
                                   sharing_name: Optional[str] = Query(default=None, description="The sharing path of the proxied path")):
-        with db.get_db_session() as session:
+        with db.get_db_session(settings.db_url) as session:
             try:
                 updated = db.update_proxied_path(session, username, sharing_key, new_path=path, new_sharing_name=sharing_name, new_fsp_name=fsp_name)
                 return _convert_proxied_path(updated)
@@ -313,7 +313,7 @@ def create_app(settings):
     @app.delete("/proxied-path/{username}/{sharing_key}", description="Delete a proxied path by sharing key")
     async def delete_proxied_path(username: str = Path(..., description="The username of the user who owns the proxied paths"),
                                   sharing_key: str = Path(..., description="The sharing key of the proxied path")):
-        with db.get_db_session() as session:
+        with db.get_db_session(settings.db_url) as session:
             deleted = db.delete_proxied_path(session, username, sharing_key)
             if deleted == 0:
                 raise HTTPException(status_code=404, detail="Proxied path not found")

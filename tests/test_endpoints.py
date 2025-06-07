@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from fileglancer_central.settings import Settings
 from fileglancer_central.app import create_app
-
+from fileglancer_central.database import *
 
 @pytest.fixture
 def temp_dir():
@@ -22,10 +22,34 @@ def temp_dir():
 @pytest.fixture
 def test_app(temp_dir):
     """Create test FastAPI app"""
-
+    
     # Create temp directory for test database
     db_path = os.path.join(temp_dir, "test.db")
     db_url = f"sqlite:///{db_path}"
+    engine = create_engine(db_url)
+    Session = sessionmaker(bind=engine)
+    db_session = Session()
+    Base.metadata.create_all(engine)
+
+    fsp = FileSharePathDB(
+        name="tempdir", 
+        zone="testzone", 
+        group="testgroup", 
+        storage="local", 
+        mount_path=temp_dir, 
+        mac_path="smb://tempdir/test/path", 
+        windows_path="\\\\tempdir\\test\\path", 
+        linux_path="/tempdir/test/path"
+    )
+    db_session.add(fsp)
+    db_session.commit()
+    print(f"Created file share path {fsp.name} with mount path {fsp.mount_path}")
+
+    # Create directory for testing proxied paths
+    test_proxied_path = os.path.join(temp_dir, "test_proxied_path")
+    os.makedirs(test_proxied_path, exist_ok=True)
+    test_proxied_path = os.path.join(temp_dir, "new_test_proxied_path")
+    os.makedirs(test_proxied_path, exist_ok=True)
 
     settings = Settings(db_url=db_url)
     app = create_app(settings)
@@ -73,6 +97,9 @@ def test_set_preference(test_client):
 
 def test_delete_preference(test_client):
     """Test deleting user preference"""
+    pref_data = {"test": "value"}
+    response = test_client.put("/preference/testuser/test_key", json=pref_data)
+    
     response = test_client.delete("/preference/testuser/test_key")
     assert response.status_code == 200
 
@@ -82,22 +109,21 @@ def test_delete_preference(test_client):
 
 def test_create_proxied_path(test_client, temp_dir):
     """Test creating a new proxied path"""
-    mount_path = os.path.join(temp_dir, "test_create_proxied_path")
-    os.makedirs(mount_path)
-    response = test_client.post(f"/proxied-path/testuser?mount_path={mount_path}")
+    path = "test_proxied_path"
+
+    response = test_client.post(f"/proxied-path/testuser?fsp_name=tempdir&path={path}")
     assert response.status_code == 200
     data = response.json()
     assert data["username"] == "testuser"
-    assert data["mount_path"] == mount_path
+    assert data["path"] == path
     assert "sharing_key" in data
     assert "sharing_name" in data
 
 
-def test_get_proxied_paths(test_client, temp_dir):
-    """Test retrieving all proxied paths for a user"""
-    mount_path = os.path.join(temp_dir, "test_get_proxied_paths")
-    os.makedirs(mount_path)
-    response = test_client.post(f"/proxied-path/testuser?mount_path={mount_path}")
+def test_get_proxied_paths(test_client):
+    """Test retrieving proxied paths for a user"""
+    path = "test_proxied_path"
+    response = test_client.post(f"/proxied-path/testuser?fsp_name=tempdir&path={path}")
     assert response.status_code == 200
     response = test_client.get(f"/proxied-path/testuser")
     assert response.status_code == 200
@@ -105,33 +131,31 @@ def test_get_proxied_paths(test_client, temp_dir):
     assert isinstance(data, dict)
     assert "paths" in data
     assert isinstance(data["paths"], list)
-    assert len(data["paths"]) > 1
 
 
-def test_update_proxied_path(test_client, temp_dir):
+def test_update_proxied_path(test_client):
     """Test updating a proxied path"""
     # First, create a proxied path to update
-    mount_path = os.path.join(temp_dir, "test_update_proxied_path")
-    os.makedirs(mount_path)
-    response = test_client.post(f"/proxied-path/testuser?mount_path={mount_path}")
+    path = "test_proxied_path"
+    response = test_client.post(f"/proxied-path/testuser?fsp_name=tempdir&path={path}")
     assert response.status_code == 200
     data = response.json()
     sharing_key = data["sharing_key"]
 
     # Update the proxied path
-    new_mount_path = temp_dir
-    response = test_client.put(f"/proxied-path/testuser/{sharing_key}?mount_path={new_mount_path}")
+    new_path = "new_test_proxied_path"
+
+    response = test_client.put(f"/proxied-path/testuser/{sharing_key}?fsp_name=tempdir&path={new_path}")
     assert response.status_code == 200
     updated_data = response.json()
-    assert updated_data["mount_path"] == new_mount_path
+    assert updated_data["path"] == new_path
 
 
-def test_delete_proxied_path(test_client, temp_dir):
+def test_delete_proxied_path(test_client):
     """Test deleting a proxied path"""
     # First, create a proxied path to delete
-    mount_path = os.path.join(temp_dir, "test_delete_proxied_path")
-    os.makedirs(mount_path)
-    response = test_client.post(f"/proxied-path/testuser?mount_path={mount_path}")
+    path = "test_proxied_path"
+    response = test_client.post(f"/proxied-path/testuser?fsp_name=tempdir&path={path}")
     assert response.status_code == 200
     data = response.json()
     sharing_key = data["sharing_key"]

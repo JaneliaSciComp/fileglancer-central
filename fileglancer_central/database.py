@@ -7,9 +7,7 @@ from sqlalchemy.orm import sessionmaker, declarative_base, Session
 from typing import Optional, Dict, List
 from loguru import logger
 
-from fileglancer_central.settings import get_settings
 
-settings = get_settings()
 Base = declarative_base()
 
 class FileSharePathDB(Base):
@@ -66,9 +64,9 @@ class ProxiedPathDB(Base):
     )
 
 
-def get_db_session():
+def get_db_session(db_url):
     """Create and return a database session"""
-    engine = create_engine(settings.db_url)
+    engine = create_engine(db_url)
     Session = sessionmaker(bind=engine)
     session = Session()
     Base.metadata.create_all(engine)

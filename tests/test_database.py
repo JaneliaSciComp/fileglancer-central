@@ -1,5 +1,6 @@
 import tempfile
 import os
+import shutil
 from datetime import datetime
 
 import pytest
@@ -10,25 +11,54 @@ from fileglancer_central.database import *
 from fileglancer_central.wiki import convert_table_to_file_share_paths
 
 @pytest.fixture
-def db_session():
-    """Create a test database session"""
-    
-    # Create temp directory for test database
+def temp_dir():
     temp_dir = tempfile.mkdtemp()
-    db_path = os.path.join(temp_dir, "test.db")
-    db_url = f"sqlite:///{db_path}"
+    print(f"Created temp directory: {temp_dir}")
+    yield temp_dir
+    # Clean up the temp directory
+    print(f"Cleaning up temp directory: {temp_dir}")
+    shutil.rmtree(temp_dir)
 
-    engine = create_engine(db_url)
+
+@pytest.fixture
+def db_session(temp_dir):
+    """Create a test database session"""
+
+    # Create temp directory for test database
+    db_path = os.path.join(temp_dir, "test.db")
+
+    engine = create_engine(f"sqlite:///{db_path}")
     Session = sessionmaker(bind=engine)
     session = Session()
     Base.metadata.create_all(engine)
     yield session
+
     # Clean up after each test
     session.query(FileSharePathDB).delete()
     session.query(LastRefreshDB).delete()
     session.query(UserPreferenceDB).delete()
     session.commit()
     session.close()
+
+
+@pytest.fixture
+def fsp(db_session, temp_dir):
+    fsp = FileSharePathDB(
+        name="tempdir", 
+        zone="testzone", 
+        group="testgroup", 
+        storage="local", 
+        mount_path=temp_dir, 
+        mac_path="smb://tempdir/test/path", 
+        windows_path="\\\\tempdir\\test\\path", 
+        linux_path="/tempdir/test/path"
+    )
+    db_session.add(fsp)
+    db_session.commit()
+    yield fsp
+    db_session.query(FileSharePathDB).delete()
+    db_session.commit()
+    db_session.close()
 
 
 def test_file_share_paths(db_session):
@@ -139,48 +169,64 @@ def test_user_preferences(db_session):
     assert pref is None
 
 
-def test_create_proxied_path(db_session):
+def test_create_proxied_path(db_session, fsp):
     # Test creating a new proxied path
     username = "testuser"
-    sharing_name = "/test/path"
-    mount_path = "/mount/path"
-    proxied_path = create_proxied_path(db_session, username, sharing_name, mount_path)
+    sharing_name = "path"
+    fsp_name = fsp.name
+    path = "test/path"
+    # Create temp directory in fsp_mouth_path
+    test_path = os.path.join(fsp.mount_path, path)
+    os.makedirs(test_path, exist_ok=True)
+    proxied_path = create_proxied_path(db_session, username, sharing_name, fsp_name, path)
     
     assert proxied_path.username == username
     assert proxied_path.sharing_name == sharing_name
     assert proxied_path.sharing_key is not None
 
 
-def test_get_proxied_path_by_sharing_key(db_session):
+def test_get_proxied_path_by_sharing_key(db_session, fsp):
     # Test retrieving a proxied path by sharing key
     username = "testuser"
-    sharing_name = "/test/path"
-    mount_path = "/mount/path"
-    created_path = create_proxied_path(db_session, username, sharing_name, mount_path)
+    sharing_name = "path"
+    fsp_name = fsp.name
+    path = "test/path"
+    # Create temp directory in fsp_mouth_path
+    test_path = os.path.join(fsp.mount_path, path)
+    os.makedirs(test_path, exist_ok=True)
+    created_path = create_proxied_path(db_session, username, sharing_name, fsp_name, path)
     
     retrieved_path = get_proxied_path_by_sharing_key(db_session, created_path.sharing_key)
     assert retrieved_path is not None
     assert retrieved_path.sharing_key == created_path.sharing_key
 
 
-def test_update_proxied_path(db_session):
+def test_update_proxied_path(db_session, fsp):
     # Test updating a proxied path
     username = "testuser"
-    sharing_name = "/test/path"
-    mount_path = "/mount/path"
-    new_sharing_name = "/new/test/path"
-    created_path = create_proxied_path(db_session, username, sharing_name, mount_path)
+    sharing_name = "path"
+    fsp_name = fsp.name
+    path = "test/path"
+    # Create temp directory in fsp_mouth_path
+    test_path = os.path.join(fsp.mount_path, path)
+    os.makedirs(test_path, exist_ok=True)
+    created_path = create_proxied_path(db_session, username, sharing_name, fsp_name, path)
     
+    new_sharing_name = "/new/test/path"
     updated_path = update_proxied_path(db_session, username, created_path.sharing_key, new_sharing_name=new_sharing_name)
     assert updated_path.sharing_name == new_sharing_name
 
 
-def test_delete_proxied_path(db_session):
+def test_delete_proxied_path(db_session, fsp):
     # Test deleting a proxied path
     username = "testuser"
-    sharing_name = "/test/path"
-    mount_path = "/mount/path"
-    created_path = create_proxied_path(db_session, username, sharing_name, mount_path)
+    sharing_name = "path"
+    fsp_name = fsp.name
+    path = "test/path"
+    # Create temp directory in fsp_mouth_path
+    test_path = os.path.join(fsp.mount_path, path)
+    os.makedirs(test_path, exist_ok=True)
+    created_path = create_proxied_path(db_session, username, sharing_name, fsp_name, path)
     
     delete_proxied_path(db_session, username, created_path.sharing_key)
     deleted_path = get_proxied_path_by_sharing_key(db_session, created_path.sharing_key)
