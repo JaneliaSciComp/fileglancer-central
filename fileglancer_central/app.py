@@ -1,6 +1,7 @@
 import os
 import sys
 from datetime import datetime
+from functools import cache
 from typing import List, Optional, Dict, Tuple
 
 from loguru import logger
@@ -20,6 +21,7 @@ from fileglancer_central.proxy_context import ProxyContext, AccessFlagsProxyCont
 
 from x2s3.utils import get_read_access_acl, get_nosuchbucket_response, get_error_response
 from x2s3.client_file import FileProxyClient
+
 
 
 def _cache_wiki_paths(confluence_url, confluence_token, force_refresh=False):
@@ -65,15 +67,18 @@ def _convert_proxied_path(db_path: db.ProxiedPathDB) -> ProxiedPath:
     )
 
 
+
 def create_app(settings):
 
-    fsp_name_to_mount = {}
-    fsp_mount_to_name = {}
-    for fsp in settings.file_share_mounts:
-        fsp_name_to_mount[fsp.name] = fsp.mount_path
-        fsp_mount_to_name[fsp.mount_path] = fsp.name
-
-
+    @cache
+    def _get_fsp_names_to_mount_paths() -> Dict[str, str]:
+        if settings.file_share_mounts:
+            return {fsp.name: fsp.mount_path for fsp in settings.file_share_mounts}
+        else:
+            with db.get_db_session() as session:
+                return {fsp.name: fsp.mount_path for fsp in db.get_all_paths(session)}
+        
+        
     def _get_file_proxy_client(sharing_key: str, sharing_name: str) -> Tuple[FileProxyClient, ProxyContext] | Tuple[Response, None]:
         with db.get_db_session() as session:
 
@@ -89,9 +94,10 @@ def create_app(settings):
             else:
                 proxy_context = ProxyContext()
 
-            if proxied_path.fsp_name not in fsp_name_to_mount:
+            fsp_names_to_mount_paths = _get_fsp_names_to_mount_paths()
+            if proxied_path.fsp_name not in fsp_names_to_mount_paths:
                 return get_error_response(400, "InvalidArgument", f"File share path {proxied_path.fsp_name} not found", sharing_name), None
-            fsp_mount_path = fsp_name_to_mount[proxied_path.fsp_name]
+            fsp_mount_path = fsp_names_to_mount_paths[proxied_path.fsp_name]
             mount_path = f"{fsp_mount_path}/{proxied_path.path}"
             return FileProxyClient(proxy_kwargs={'target_name': sharing_name}, path=mount_path), proxy_context
 
