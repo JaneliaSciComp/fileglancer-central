@@ -24,8 +24,8 @@ from x2s3.client_file import FileProxyClient
 
 
 
-def _cache_wiki_paths(confluence_url, confluence_token, force_refresh=False):
-    with db.get_db_session(settings.db_url) as session:
+def _cache_wiki_paths(db_url, confluence_url, confluence_token, force_refresh=False):
+    with db.get_db_session(db_url) as session:
         # Get the last refresh time from the database
         last_refresh = db.get_last_refresh(session)
 
@@ -163,7 +163,7 @@ def create_app(settings):
             raise HTTPException(status_code=500, detail="Confluence is not configured")
         
         if confluence_url and confluence_token:
-            paths = _cache_wiki_paths(confluence_url, confluence_token, force_refresh)
+            paths = _cache_wiki_paths(settings.db_url, confluence_url, confluence_token, force_refresh)
         else:
             paths = [FileSharePath(
                 name=slugify_path(path),
