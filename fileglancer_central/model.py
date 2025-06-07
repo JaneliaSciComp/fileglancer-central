@@ -123,8 +123,8 @@ class ProxiedPath(BaseModel):
     path: str = Field(
         description="The path relative to the file share path mount point"
     )
-    fsp_mount_path: str = Field(
-        description="The mount path from the file share paths table that this proxied path is associated with"
+    fsp_name: str = Field(
+        description="The name of the file share path that this proxied path is associated with"
     )
     created_at: datetime = Field(
         description="When this proxied path was created"
