@@ -5,6 +5,7 @@ from functools import cache
 from typing import List, Optional, Dict, Tuple
 
 from loguru import logger
+from pydantic import HttpUrl
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request, Query, Path
 from fastapi.middleware.cors import CORSMiddleware
@@ -54,8 +55,12 @@ def _cache_wiki_paths(db_url, confluence_url, confluence_token, force_refresh=Fa
         ) for path in db.get_all_paths(session)]
     
 
-def _convert_proxied_path(db_path: db.ProxiedPathDB) -> ProxiedPath:
+def _convert_proxied_path(db_path: db.ProxiedPathDB, external_proxy_url: Optional[HttpUrl]) -> ProxiedPath:
     """Convert a database ProxiedPathDB model to a Pydantic ProxiedPath model"""
+    if external_proxy_url:
+        url = f"{external_proxy_url}/{db_path.sharing_key}/{db_path.sharing_name}"
+    else:
+        url = None
     return ProxiedPath(
         username=db_path.username,
         sharing_key=db_path.sharing_key,
@@ -63,7 +68,8 @@ def _convert_proxied_path(db_path: db.ProxiedPathDB) -> ProxiedPath:
         fsp_name=db_path.fsp_name,
         path=db_path.path,
         created_at=db_path.created_at,
-        updated_at=db_path.updated_at
+        updated_at=db_path.updated_at,
+        url=url
     )
 
 
@@ -267,7 +273,7 @@ def create_app(settings):
         with db.get_db_session(settings.db_url) as session:
             try:
                 new_path = db.create_proxied_path(session, username, sharing_name, fsp_name, path)
-                return _convert_proxied_path(new_path)
+                return _convert_proxied_path(new_path, settings.external_proxy_url)
             except ValueError as e:
                 raise HTTPException(status_code=400, detail=str(e))
 
@@ -279,7 +285,7 @@ def create_app(settings):
                                 path: str = Query(None, description="The path being proxied")):
         with db.get_db_session(settings.db_url) as session:
             db_proxied_paths = db.get_proxied_paths(session, username, fsp_name, path)
-            proxied_paths = [_convert_proxied_path(db_path) for db_path in db_proxied_paths]
+            proxied_paths = [_convert_proxied_path(db_path, settings.external_proxy_url) for db_path in db_proxied_paths]
             return ProxiedPathResponse(paths=proxied_paths)
 
 
@@ -293,7 +299,7 @@ def create_app(settings):
                 raise HTTPException(status_code=404, detail="Proxied path not found")
             if path.username != username:
                 raise HTTPException(status_code=404, detail="Proxied path not found for user {username}")
-            return _convert_proxied_path(path)
+            return _convert_proxied_path(path, settings.external_proxy_url)
 
 
     @app.put("/proxied-path/{username}/{sharing_key}", description="Update a proxied path by sharing key")
@@ -305,7 +311,7 @@ def create_app(settings):
         with db.get_db_session(settings.db_url) as session:
             try:
                 updated = db.update_proxied_path(session, username, sharing_key, new_path=path, new_sharing_name=sharing_name, new_fsp_name=fsp_name)
-                return _convert_proxied_path(updated)
+                return _convert_proxied_path(updated, settings.external_proxy_url)
             except ValueError as e:
                 raise HTTPException(status_code=400, detail=str(e))
 
