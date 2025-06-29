@@ -114,6 +114,7 @@ class ProxiedPath(BaseModel):
     username: str = Field(
         description="The username of the user who owns this proxied path"
     )
+    # TODO: does this need to be exposed in the API? It's already included in the URL.
     sharing_key: str = Field(
         description="The sharing key is part of the URL proxy path. It is used to uniquely identify the proxied path."
     )
@@ -132,7 +133,9 @@ class ProxiedPath(BaseModel):
     updated_at: datetime = Field(
         description="When this proxied path was last updated"
     )
-
+    url: HttpUrl = Field(
+        description="The URL for accessing the data via the proxy"
+    )
 
 class ProxiedPathResponse(BaseModel):
     paths: List[ProxiedPath] = Field(
