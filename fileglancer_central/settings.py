@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     jira_url: Optional[HttpUrl] = None
     jira_token: Optional[str] = None
 
+    # The external URL of the proxy server for accessing proxied paths.
+    # Maps to the /files/ end points of the fileglancer-central app.
+    external_proxy_url: Optional[HttpUrl] = None
+
     model_config = SettingsConfigDict(
         yaml_file="config.yaml",
         env_file='.env',

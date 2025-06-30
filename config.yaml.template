@@ -30,3 +30,8 @@ confluence_url: https://wikis.janelia.org
 #
 jira_url: https://issues.hhmi.org/issues
 
+#
+# External URL for proxied paths
+#
+external_proxy_url: http://localhost:7878/files
+
