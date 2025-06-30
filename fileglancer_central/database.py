@@ -7,9 +7,9 @@ from sqlalchemy.orm import sessionmaker, declarative_base, Session
 from typing import Optional, Dict, List
 from loguru import logger
 
+SHARING_KEY_LENGTH = 12
 
 Base = declarative_base()
-
 class FileSharePathDB(Base):
     """Database model for storing file share paths"""
     __tablename__ = 'file_share_paths'
@@ -221,7 +221,7 @@ def create_proxied_path(session: Session, username: str, sharing_name: str, fsp_
     """Create a new proxied path"""
     _validate_proxied_path(session, fsp_name, path)
 
-    sharing_key = secrets.token_urlsafe(6)
+    sharing_key = secrets.token_urlsafe(SHARING_KEY_LENGTH)
     now = datetime.now(UTC)
     session.add(ProxiedPathDB(
         username=username, 
