@@ -3,7 +3,10 @@ name = "fileglancer-central"
 version = "0.5.0"
 readme = "README.md"
 authors = [
-    { name = "Konrad Rokicki", email = "rokicki@janelia.hhmi.org" }
+    { name = "Allison Truhlar", email = "truhlara@janelia.hhmi.org" },
+    { name = "Jody Clements", email = "clementsj@janelia.hhmi.org" },
+    { name = "Cristian Goina", email = "goinac@janelia.hhmi.org" },
+    { name = "Konrad Rokicki", email = "rokickik@janelia.hhmi.org" }
 ]
 license = { file = "LICENSE" }
 classifiers = [
