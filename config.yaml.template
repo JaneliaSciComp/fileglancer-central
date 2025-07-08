@@ -15,10 +15,10 @@ use_access_flags: True
 
 #
 # File share mount paths to view in the UI. 
-# (this setting is ignored if confluence_url is set below)
+# (this setting will override confluence_url, set below)
 #
-file_share_mounts:
-  - /tmp
+# file_share_mounts:
+#   - /tmp
 
 #
 # Confluence URL
