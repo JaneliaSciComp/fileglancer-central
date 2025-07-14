@@ -64,25 +64,6 @@ class ProxiedPathDB(Base):
     )
 
 
-class TicketDB(Base):
-    """Database model for storing proxied paths"""
-    __tablename__ = 'tickets'
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    username = Column(String, nullable=False)
-    fsp_name = Column(String, nullable=False)
-    path = Column(String, nullable=False)
-    ticket_key = Column(String, nullable=False, unique=True)
-    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(UTC))
-    updated_at = Column(DateTime, nullable=False, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
-    
-    # TODO: Do we want to only allow one ticket per path?
-    # Commented out now for testing purposes
-    # __table_args__ = (
-    #     UniqueConstraint('username', 'fsp_name', 'path', name='uq_ticket_path'),
-    # )
-
-
 def get_db_session(db_url):
     """Create and return a database session"""
     engine = create_engine(db_url)
@@ -289,18 +270,3 @@ def delete_proxied_path(session: Session, username: str, sharing_key: str):
     session.query(ProxiedPathDB).filter_by(username=username, sharing_key=sharing_key).delete()
     session.commit()
 
-
-def create_ticket_entry(session: Session, username: str, fsp_name: str, path: str, ticket_key: str) -> TicketDB:
-    """Create a new ticket entry in the database"""
-    now = datetime.now(UTC)
-    ticket = TicketDB(
-        username=username,
-        fsp_name=fsp_name,
-        path=path,
-        ticket_key=ticket_key,
-        created_at=now,
-        updated_at=now
-    )
-    session.add(ticket)
-    session.commit()
-    return ticket

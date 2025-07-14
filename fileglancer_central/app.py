@@ -185,60 +185,21 @@ def create_app(settings):
         return FileSharePathResponse(paths=paths)
 
 
-    @app.post("/ticket", response_model=Ticket,
+    @app.post("/ticket", response_model=str,
               description="Create a new ticket and return the key")
     async def create_ticket(
-        username: str,
-        fsp_name: str,
-        path: str,
         project_key: str,
         issue_type: str,
         summary: str,
         description: str
     ) -> str:
-        try:
-            # Make ticket on JIRA
-            jiraTicket = create_jira_ticket(
-                project_key=project_key,
-                issue_type=issue_type, 
-                summary=summary,
-                description=description
-            )
-            if not jiraTicket or 'key' not in jiraTicket:
-                raise HTTPException(status_code=500, detail="Failed to create JIRA ticket")
-            
-            # Save the ticket in the database
-            with db.get_db_session(settings.db_url) as session:
-                dbTicket = db.create_ticket_entry(
-                    session=session,
-                    username=username,
-                    fsp_name=fsp_name,
-                    path=path,
-                    ticket_key=jiraTicket['key']
-                )
-                if dbTicket is None:
-                    raise HTTPException(status_code=500, detail="Failed to create ticket entry in database")
-                
-            # Get the full ticket details using the key
-            ticket_details = get_jira_ticket_details(jiraTicket['key'])
-        
-            return Ticket(
-                username=username,
-                fsp_name=fsp_name,
-                path=path,
-                key=ticket_details['key'],
-                created=ticket_details['created'],
-                updated=ticket_details['updated'],
-                status=ticket_details['status'],
-                resolution=ticket_details['resolution'],
-                description=ticket_details['description'],
-                link=ticket_details['link'],
-                comments=ticket_details['comments']
-            )
-         
-        except Exception as e:
-            logger.error(f"Error creating ticket: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+        ticket = create_jira_ticket(
+            project_key=project_key,
+            issue_type=issue_type, 
+            summary=summary,
+            description=description
+        )
+        return ticket['key']
     
 
     @app.get("/ticket/{ticket_key}", response_model=Ticket, 
