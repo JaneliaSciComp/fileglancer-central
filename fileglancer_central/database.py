@@ -290,6 +290,19 @@ def delete_proxied_path(session: Session, username: str, sharing_key: str):
     session.commit()
 
 
+def get_tickets(session: Session, username: str, fsp_name: str = None, path: str = None) -> List[TicketDB]:
+    """Get tickets for a user, optionally filtered by fsp_name and path"""
+    logger.info(f"Getting tickets for {username} with fsp_name={fsp_name} and path={path}")
+    query = session.query(TicketDB).filter_by(username=username)
+    if fsp_name:
+        logger.info(f"Filtering by fsp_name={fsp_name}")
+        query = query.filter_by(fsp_name=fsp_name)
+    if path:
+        logger.info(f"Filtering by path={path}")
+        query = query.filter_by(path=path)
+    return query.all()
+
+
 def create_ticket_entry(session: Session, username: str, fsp_name: str, path: str, ticket_key: str) -> TicketDB:
     """Create a new ticket entry in the database"""
     now = datetime.now(UTC)

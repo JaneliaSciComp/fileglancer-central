@@ -241,17 +241,30 @@ def create_app(settings):
             raise HTTPException(status_code=500, detail=str(e))
     
 
-    @app.get("/ticket/{ticket_key}", response_model=Ticket, 
-             description="Retrieve a ticket by its key")
-    async def get_ticket(ticket_key: str):
-        try:
-            return get_jira_ticket_details(ticket_key)
-        except Exception as e:
-            if str(e) == "Issue Does Not Exist":
-                raise HTTPException(status_code=404, detail=str(e))
-            else:
-                raise HTTPException(status_code=500, detail=str(e))
-
+    @app.get("/ticket/{username}", response_model=List[Ticket], 
+             description="Retrieve tickets for a user")
+    async def get_tickets(username: str = Path(..., description="The username of the user who created the tickets"),
+                          fsp_name: Optional[str] = Query(None, description="The name of the file share path that the ticket is associated with"),
+                          path: Optional[str] = Query(None, description="The path that the ticket is associated with")):
+        with db.get_db_session(settings.db_url) as session:
+            tickets = db.get_tickets(session, username, fsp_name, path)
+            if not tickets:
+                raise HTTPException(status_code=404, detail="No tickets found for this user")
+            for ticket in tickets:
+                try:
+                    ticket_details = get_jira_ticket_details(ticket.ticket_key)
+                    ticket.key = ticket_details['key']
+                    ticket.created = ticket_details['created']
+                    ticket.updated = ticket_details['updated']
+                    ticket.status = ticket_details['status']
+                    ticket.resolution = ticket_details['resolution']
+                    ticket.description = ticket_details['description']
+                    ticket.link = ticket_details['link']
+                    ticket.comments = ticket_details['comments']
+                except Exception as e:
+                    logger.error(f"Error retrieving details for ticket {ticket.ticket_key}: {e}")
+            return tickets 
+        
 
     @app.delete("/ticket/{ticket_key}",
                 description="Delete a ticket by its key")
