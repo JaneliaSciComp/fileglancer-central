@@ -73,6 +73,15 @@ class TicketComment(BaseModel):
 
 class Ticket(BaseModel):
     """A JIRA ticket"""
+    username: str = Field(
+        description="The username of the user who created the ticket"
+    )
+    path: str = Field(
+        description="The path of the file the ticket was created for, relative to the file share path mount point"
+    )
+    fsp_name: str = Field(
+        description="The name of the file share path associated with the file this ticket was created for"
+    )
     key: str = Field(
         description="The key of the ticket"
     )
