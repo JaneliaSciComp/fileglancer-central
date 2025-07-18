@@ -53,7 +53,7 @@ platforms = ["osx-arm64", "osx-64", "linux-64"]
 [tool.pixi.tasks]
 dev-install = "pip install -e ."
 dev-launch = "pixi run uvicorn fileglancer_central.app:app --port 7878 --reload"
-dev-launch-remote = "pixi run uvicorn fileglancer_central.app:app --host 0.0.0.0 --workers 1 --port 7878 --reload --ssl-keyfile /opt/certs/cert.key --ssl-certfile /opt/certs/cert.crt"
+dev-launch-remote = "pixi run uvicorn fileglancer_central.app:app --host 0.0.0.0 --workers 10 --port 7878 --reload --ssl-keyfile /opt/certs/cert.key --ssl-certfile /opt/certs/cert.crt"
 
 [tool.pixi.feature.test.tasks]
 test-install = "pip install -e ."
