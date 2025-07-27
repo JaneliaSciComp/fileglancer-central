@@ -206,10 +206,8 @@ def get_proxied_paths(session: Session, username: str, fsp_name: str = None, pat
     logger.info(f"Getting proxied paths for {username} with fsp_name={fsp_name} and path={path}")
     query = session.query(ProxiedPathDB).filter_by(username=username)
     if fsp_name:
-        logger.info(f"Filtering by fsp_name={fsp_name}")
         query = query.filter_by(fsp_name=fsp_name)
     if path:
-        logger.info(f"Filtering by path={path}")
         query = query.filter_by(path=path)
     return query.all()
 
@@ -295,10 +293,8 @@ def get_tickets(session: Session, username: str, fsp_name: str = None, path: str
     logger.info(f"Getting tickets for {username} with fsp_name={fsp_name} and path={path}")
     query = session.query(TicketDB).filter_by(username=username)
     if fsp_name:
-        logger.info(f"Filtering by fsp_name={fsp_name}")
         query = query.filter_by(fsp_name=fsp_name)
     if path:
-        logger.info(f"Filtering by path={path}")
         query = query.filter_by(path=path)
     return query.all()
 
