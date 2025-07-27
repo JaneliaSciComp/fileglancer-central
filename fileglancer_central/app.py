@@ -34,14 +34,15 @@ def _cache_wiki_paths(db_url, confluence_url, confluence_token, force_refresh=Fa
         if not last_refresh or (datetime.now() - last_refresh.db_last_updated).days >= 1 or force_refresh:
             logger.info("Last refresh was more than a day ago, checking for updates...")
             
-            # Get updated paths from the wiki
-            table, table_last_updated = get_wiki_table(confluence_url, confluence_token)
-
-            new_paths = convert_table_to_file_share_paths(table)
-
-            if not last_refresh or table_last_updated != last_refresh.source_last_updated:
-                logger.info("Wiki table has changed, refreshing file share paths...")
-                db.update_file_share_paths(session, new_paths, table_last_updated)
+            try:
+                # Get updated paths from the wiki
+                table, table_last_updated = get_wiki_table(confluence_url, confluence_token)
+                new_paths = convert_table_to_file_share_paths(table)
+                if not last_refresh or table_last_updated != last_refresh.source_last_updated:
+                    logger.info("Wiki table has changed, refreshing file share paths...")
+                    db.update_file_share_paths(session, new_paths, table_last_updated)
+            except Exception as e:
+                logger.error(f"Error updating wiki paths: {e}")
 
         return [FileSharePath(
             name=path.name,
