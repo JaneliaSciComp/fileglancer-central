@@ -16,10 +16,15 @@ use_access_flags: True
 
 #
 # File share mount paths to view in the UI. 
-# (this setting will override confluence_url, set below)
+# (this setting will override atlassian_url, set below)
 #
 # file_share_mounts:
 #   - /tmp
+
+#
+# Atlassian Cloud URL. Used for retrieving file share paths and tickets.
+#
+#atlassian_url: https://YOURID.atlassian.net
 
 #
 # External URL for proxied paths
