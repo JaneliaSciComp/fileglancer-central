@@ -16,20 +16,15 @@ use_access_flags: True
 
 #
 # File share mount paths to view in the UI. 
-# (this setting will override confluence_url, set below)
+# (this setting will override atlassian_url, set below)
 #
 # file_share_mounts:
 #   - /tmp
 
 #
-# Confluence URL
+# Atlassian Cloud URL. Used for retrieving file share paths and tickets.
 #
-confluence_url: https://wikis.janelia.org 
-
-#
-# JIRA URL
-#
-jira_url: https://issues.hhmi.org/issues
+#atlassian_url: https://YOURID.atlassian.net
 
 #
 # External URL for proxied paths

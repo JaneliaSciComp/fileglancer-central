@@ -1,17 +1,14 @@
-from typing import List, Dict, Optional
+from typing import List, Optional
 from functools import cache
-import sys
 
-from pathlib import Path
-from pydantic import HttpUrl, BaseModel
+from pydantic import HttpUrl, model_validator
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
     SettingsConfigDict,
     YamlConfigSettingsSource
 )
-from loguru import logger
-    
+
 
 class Settings(BaseSettings):
     """ Settings can be read from a settings.yaml file, 
@@ -26,18 +23,18 @@ class Settings(BaseSettings):
     # If true, use seteuid/setegid for file access
     use_access_flags: bool = False
 
-    # Confluence settings for getting the institutional file share paths
-    confluence_url: Optional[HttpUrl] = None
-    confluence_token: Optional[str] = None
+    # Atlassian settings for accessing the Wiki and JIRA services
+    atlassian_url: Optional[HttpUrl] = None
+    atlassian_username: Optional[str] = None
+    atlassian_token: Optional[str] = None
+
+    # The URL of JIRA's /browse/ API endpoint which can be used to construct a link to a ticket
+    jira_browse_url: Optional[HttpUrl] = None
 
     # If confluence settings are not provided, use a static list of paths to mount as file shares
     # This can specify the home directory using a ~/ prefix.
     file_share_mounts: List[str] = []
     
-    # JIRA settings for managing tickets
-    jira_url: Optional[HttpUrl] = None
-    jira_token: Optional[str] = None
-
     # The external URL of the proxy server for accessing proxied paths.
     # Maps to the /files/ end points of the fileglancer-central app.
     external_proxy_url: Optional[HttpUrl] = None
@@ -66,6 +63,12 @@ class Settings(BaseSettings):
             YamlConfigSettingsSource(settings_cls),
             file_secret_settings,
         )
+    
+    @model_validator(mode='after')
+    def set_jira_browse_url(self):
+        if self.jira_browse_url is None:
+            self.jira_browse_url = f"{self.atlassian_url}/browse"
+        return self
 
 
 @cache
