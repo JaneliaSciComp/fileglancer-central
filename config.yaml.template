@@ -22,16 +22,6 @@ use_access_flags: True
 #   - /tmp
 
 #
-# Confluence URL
-#
-confluence_url: https://wikis.janelia.org 
-
-#
-# JIRA URL
-#
-jira_url: https://issues.hhmi.org/issues
-
-#
 # External URL for proxied paths
 #
 external_proxy_url: http://localhost:7878/files

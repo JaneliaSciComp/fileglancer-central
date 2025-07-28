@@ -25,7 +25,7 @@ from x2s3.client_file import FileProxyClient
 
 
 
-def _cache_wiki_paths(db_url, confluence_url, confluence_token, force_refresh=False):
+def _cache_wiki_paths(db_url, force_refresh=False):
     with db.get_db_session(db_url) as session:
         # Get the last refresh time from the database
         last_refresh = db.get_last_refresh(session)
@@ -36,7 +36,7 @@ def _cache_wiki_paths(db_url, confluence_url, confluence_token, force_refresh=Fa
             
             try:
                 # Get updated paths from the wiki
-                table, table_last_updated = get_wiki_table(confluence_url, confluence_token)
+                table, table_last_updated = get_wiki_table()
                 new_paths = convert_table_to_file_share_paths(table)
                 if not last_refresh or table_last_updated != last_refresh.source_last_updated:
                     logger.info("Wiki table has changed, refreshing file share paths...")
@@ -120,8 +120,7 @@ def create_app(settings):
         logger.trace(f"  log_level: {settings.log_level}")
         logger.trace(f"  db_url: {settings.db_url}")
         logger.trace(f"  use_access_flags: {settings.use_access_flags}")
-        logger.trace(f"  confluence_url: {settings.confluence_url}")
-        logger.trace(f"  jira_url: {settings.jira_url}")
+        logger.trace(f"  atlassian_url: {settings.atlassian_url}")
         logger.info(f"Server ready")
         yield
         # Cleanup (if needed)
@@ -162,15 +161,14 @@ def create_app(settings):
              description="Get all file share paths from the database")
     async def get_file_share_paths(force_refresh: bool = False) -> List[FileSharePath]:
         
-        confluence_url = settings.confluence_url
-        confluence_token = settings.confluence_token
+        atlassian_url = settings.atlassian_url
         file_share_mounts = settings.file_share_mounts
-        if not confluence_url and not confluence_token and not file_share_mounts:
-            logger.error("You must configure `confluence_url` and `confluence_token` or set `file_share_mounts`.")
+        if not atlassian_url and not file_share_mounts:
+            logger.error("You must configure `atlassian_url` or set `file_share_mounts`.")
             raise HTTPException(status_code=500, detail="Confluence is not configured")
         
-        if confluence_url and confluence_token:
-            paths = _cache_wiki_paths(settings.db_url, confluence_url, confluence_token, force_refresh)
+        if atlassian_url:
+            paths = _cache_wiki_paths(settings.db_url, force_refresh)
         else:
             paths = [FileSharePath(
                 name=slugify_path(path),

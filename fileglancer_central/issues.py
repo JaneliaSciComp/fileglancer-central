@@ -11,13 +11,14 @@ settings = get_settings()
 DEBUG = False
 
 def get_jira_client() -> Jira:
-    jira_server = settings.jira_url
-    jira_token = settings.jira_token
+    jira_server = str(settings.atlassian_url)
+    jira_username = settings.atlassian_username
+    jira_token = settings.atlassian_token
 
     if not all([jira_server, jira_token]):
         raise ValueError("Missing required JIRA credentials in environment variables")
     
-    return Jira(url=jira_server, token=jira_token)
+    return Jira(url=jira_server, username=jira_username, password=jira_token, cloud=True)
 
 
 def create_jira_ticket(summary: str, description: str, project_key: str, issue_type: str) -> str:
@@ -85,7 +86,7 @@ def get_jira_ticket_details(ticket_key: str) -> dict:
         'status': status, # E.g. "Waiting for support", "In Progress", "Resolved"
         'resolution': resolution, # E.g. "Unresolved", "Fixed"
         'description': description,
-        'link': f"{settings.jira_url}/browse/{ticket_key}",
+        'link': f"{settings.jira_browse_url}/{ticket_key}",
         'comments': [{
             'author_name': c['author']['name'],
             'author_display_name': c['author']['displayName'],

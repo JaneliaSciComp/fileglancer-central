@@ -22,15 +22,23 @@ settings = get_settings()
 confluence_space = "SCS"
 confluence_page = "Lab and Project File Share Paths"
 
+
 def parse_iso_timestamp(timestamp):
     """Parse ISO format timestamp string to datetime object"""
     return datetime.fromisoformat(timestamp)
 
 
-def get_wiki_table(confluence_url, confluence_token):
+def get_confluence_client() -> Confluence:
+    confluence_server = str(settings.atlassian_url)
+    confluence_username = settings.atlassian_username
+    confluence_token = settings.atlassian_token
+    return Confluence(url=confluence_server, username=confluence_username, password=confluence_token, cloud=True)
+
+
+def get_wiki_table():
     """Fetch and parse the file share paths table from the wiki"""
-    confluence = Confluence(url=str(confluence_url), token=confluence_token)
-    
+    confluence = get_confluence_client()
+
     page = confluence.get_page_by_title(confluence_space, confluence_page)
     page_id = page['id']
     page = confluence.get_page_by_id(page_id, status=None, version=None,
