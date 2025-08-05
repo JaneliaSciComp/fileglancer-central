@@ -13,9 +13,9 @@ from fastapi.responses import RedirectResponse, Response,JSONResponse, PlainText
 from fastapi.exceptions import RequestValidationError, StarletteHTTPException
 
 from fileglancer_central import database as db
-from fileglancer_central.model import FileSharePath, FileSharePathResponse, Ticket, ProxiedPath, ProxiedPathResponse
+from fileglancer_central.model import FileSharePath, FileSharePathResponse, Ticket, ProxiedPath, ProxiedPathResponse, ExternalBucket, ExternalBucketResponse
 from fileglancer_central.settings import get_settings
-from fileglancer_central.wiki import get_file_share_paths_table, convert_table_to_file_share_paths
+from fileglancer_central.wiki import get_file_share_paths_table, convert_table_to_file_share_paths, get_external_buckets
 from fileglancer_central.issues import create_jira_ticket, get_jira_ticket_details, delete_jira_ticket
 from fileglancer_central.utils import slugify_path
 from fileglancer_central.proxy_context import ProxyContext, AccessFlagsProxyContext
@@ -54,7 +54,34 @@ def _cache_wiki_paths(db_url, force_refresh=False):
             windows_path=path.windows_path,
             linux_path=path.linux_path,
         ) for path in db.get_all_paths(session)]
-    
+
+
+def _cache_external_buckets(db_url, force_refresh=False):
+    with db.get_db_session(db_url) as session:
+        # Get the last refresh time from the database
+        last_refresh = db.get_last_refresh(session, "external_buckets")
+
+        # Check if we need to refresh the external buckets
+        if not last_refresh or (datetime.now() - last_refresh.db_last_updated).days >= 1 or force_refresh:
+            logger.info("Last refresh was more than a day ago, checking for updates...")
+            
+            try:
+                # Get updated buckets from the wiki
+                new_buckets, table_last_updated = get_external_buckets()
+                if not last_refresh or table_last_updated != last_refresh.source_last_updated:
+                    logger.info("Wiki table has changed, refreshing external buckets...")
+                    db.update_external_buckets(session, new_buckets, table_last_updated)
+            except Exception as e:
+                logger.error(f"Error updating external buckets: {e}")
+
+        return [ExternalBucket(
+            id=bucket.id,
+            full_path=bucket.full_path,
+            external_url=bucket.external_url,
+            fsp_name=bucket.fsp_name,
+            relative_path=bucket.relative_path
+        ) for bucket in db.get_all_external_buckets(session)]
+
 
 def _convert_proxied_path(db_path: db.ProxiedPathDB, external_proxy_url: Optional[HttpUrl]) -> ProxiedPath:
     """Convert a database ProxiedPathDB model to a Pydantic ProxiedPath model"""
@@ -188,6 +215,17 @@ def create_app(settings):
 
         return FileSharePathResponse(paths=paths)
 
+    @app.get("/external-buckets", response_model=ExternalBucketResponse,
+             description="Get all external buckets from the database")
+    async def get_external_buckets(force_refresh: bool = False) -> ExternalBucketResponse:
+        
+        atlassian_url = settings.atlassian_url
+        if not atlassian_url:
+            logger.error("You must configure `atlassian_url` to fetch external buckets.")
+            raise HTTPException(status_code=500, detail="Confluence is not configured")
+        
+        buckets = _cache_external_buckets(settings.db_url, force_refresh)
+        return ExternalBucketResponse(buckets=buckets)
 
     @app.post("/ticket", response_model=Ticket,
               description="Create a new ticket and return the key")

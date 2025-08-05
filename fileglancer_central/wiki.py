@@ -106,30 +106,51 @@ def get_external_buckets():
 
     body = page['body']['view']['value']
     tables = pd.read_html(StringIO(body))
-    table = tables[0]
-
-    # Extract relevant columns
-    table = table[['External URL', 'Filesystem Path']]
-
-    # Convert to ExternalBucketDB objects
-    buckets = []
-    for _, row in table.iterrows():
-        full_path = row['Filesystem Path']
-        # Split path into fsp_name and relative path
-        path_parts = full_path.split('/', 2)
-        if len(path_parts) >= 2:
-            fsp_name = path_parts[1]  # First component after leading slash
-            relative_path = path_parts[2] if len(path_parts) > 2 else ''
+    
+    # Combine all tables that contain external bucket data
+    all_buckets = []
+    
+    for i, table in enumerate(tables):
+        logger.debug(f"Processing table {i+1} with columns: {list(table.columns)}")
+        
+        # Check if this table has the expected columns
+        if 'External URL' not in table.columns or 'Filesystem Path' not in table.columns:
+            logger.debug(f"Skipping table {i+1} - missing required columns")
+            continue
             
-            bucket = ExternalBucketDB(
-                full_path=full_path,
-                external_url=row['External URL'],
-                fsp_name=fsp_name,
-                relative_path=relative_path
-            )
-            buckets.append(bucket)
+        # Extract relevant columns
+        table_subset = table[['External URL', 'Filesystem Path']]
+        
+        # Convert to ExternalBucketDB objects
+        for _, row in table_subset.iterrows():
+            full_path = row['Filesystem Path']
+            external_url = row['External URL']
+            
+            # Skip rows with null/empty values for required fields
+            if pd.isna(full_path) or pd.isna(external_url) or not full_path or not external_url:
+                logger.debug(f"Skipping bucket with null values: full_path={full_path}, external_url={external_url}")
+                continue
+                
+            # Split path into fsp_name and relative path
+            path_parts = full_path.split('/', 2)
+            if len(path_parts) >= 2:
+                fsp_name = path_parts[1]  # First component after leading slash
+                relative_path = path_parts[2] if len(path_parts) > 2 else ''
+                
+                bucket = ExternalBucketDB(
+                    full_path=full_path,
+                    external_url=external_url,
+                    fsp_name=fsp_name,
+                    relative_path=relative_path
+                )
+                all_buckets.append(bucket)
+    
+    buckets = all_buckets
 
-    logger.debug(f"Found {len(buckets)} external buckets in the wiki")
+    # Count how many tables we actually processed
+    processed_tables = sum(1 for table in tables if 'External URL' in table.columns and 'Filesystem Path' in table.columns)
+    
+    logger.debug(f"Processed {processed_tables} tables and found {len(buckets)} external buckets in the wiki")
     return buckets, table_last_updated
 
 

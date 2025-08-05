@@ -154,6 +154,11 @@ def get_all_paths(session):
     return session.query(FileSharePathDB).all()
 
 
+def get_all_external_buckets(session):
+    """Get all external buckets from the database"""
+    return session.query(ExternalBucketDB).all()
+
+
 def get_last_refresh(session, table_name: str):
     """Get the last refresh time from the database for a specific table"""
     return session.query(LastRefreshDB).filter_by(table_name=table_name).first()
@@ -250,7 +255,6 @@ def update_external_buckets(session, buckets, table_last_updated):
     session.add(LastRefreshDB(table_name=table_name, source_last_updated=table_last_updated, db_last_updated=datetime.now(UTC)))
 
     session.commit()
-
 
 
 def get_user_preference(session: Session, username: str, key: str) -> Optional[Dict]:

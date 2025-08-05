@@ -150,3 +150,29 @@ class ProxiedPathResponse(BaseModel):
     paths: List[ProxiedPath] = Field(
         description="A list of proxied paths"
     )
+
+
+class ExternalBucket(BaseModel):
+    """An external bucket for S3-compatible storage"""
+    id: int = Field(
+        description="The unique identifier for this external bucket"
+    )
+    full_path: str = Field(
+        description="The full path to the external bucket"
+    )
+    external_url: str = Field(
+        description="The external URL for accessing this bucket"
+    )
+    fsp_name: str = Field(
+        description="The name of the file share path that this external bucket is associated with"
+    )
+    relative_path: Optional[str] = Field(
+        description="The relative path within the file share path",
+        default=None
+    )
+
+
+class ExternalBucketResponse(BaseModel):
+    buckets: List[ExternalBucket] = Field(
+        description="A list of external buckets"
+    )
