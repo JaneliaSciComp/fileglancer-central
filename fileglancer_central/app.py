@@ -15,7 +15,7 @@ from fastapi.exceptions import RequestValidationError, StarletteHTTPException
 from fileglancer_central import database as db
 from fileglancer_central.model import FileSharePath, FileSharePathResponse, Ticket, ProxiedPath, ProxiedPathResponse
 from fileglancer_central.settings import get_settings
-from fileglancer_central.wiki import get_wiki_table, convert_table_to_file_share_paths
+from fileglancer_central.wiki import get_file_share_paths_table, convert_table_to_file_share_paths
 from fileglancer_central.issues import create_jira_ticket, get_jira_ticket_details, delete_jira_ticket
 from fileglancer_central.utils import slugify_path
 from fileglancer_central.proxy_context import ProxyContext, AccessFlagsProxyContext
@@ -36,7 +36,7 @@ def _cache_wiki_paths(db_url, force_refresh=False):
             
             try:
                 # Get updated paths from the wiki
-                table, table_last_updated = get_wiki_table()
+                table, table_last_updated = get_file_share_paths_table()
                 new_paths = convert_table_to_file_share_paths(table)
                 if not last_refresh or table_last_updated != last_refresh.source_last_updated:
                     logger.info("Wiki table has changed, refreshing file share paths...")

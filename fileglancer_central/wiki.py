@@ -35,7 +35,7 @@ def get_confluence_client() -> Confluence:
     return Confluence(url=confluence_server, username=confluence_username, password=confluence_token, cloud=True)
 
 
-def get_wiki_table():
+def get_file_share_paths_table():
     """Fetch and parse the file share paths table from the wiki"""
     confluence = get_confluence_client()
 
