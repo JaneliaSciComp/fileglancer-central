@@ -121,6 +121,11 @@ def create_app(settings):
         logger.trace(f"  db_url: {settings.db_url}")
         logger.trace(f"  use_access_flags: {settings.use_access_flags}")
         logger.trace(f"  atlassian_url: {settings.atlassian_url}")
+        
+        # Initialize database (run migrations once at startup)
+        logger.info("Initializing database...")
+        db.initialize_database(settings.db_url)
+        
         logger.info(f"Server ready")
         yield
         # Cleanup (if needed)

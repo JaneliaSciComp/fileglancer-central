@@ -9,6 +9,9 @@ from loguru import logger
 
 SHARING_KEY_LENGTH = 12
 
+# Global flag to track if migrations have been run
+_migrations_run = False
+
 Base = declarative_base()
 class FileSharePathDB(Base):
     """Database model for storing file share paths"""
@@ -96,6 +99,12 @@ class TicketDB(Base):
 
 def run_alembic_upgrade(db_url):
     """Run Alembic migrations to upgrade database to latest version"""
+    global _migrations_run
+    
+    if _migrations_run:
+        logger.debug("Migrations already run, skipping")
+        return
+    
     try:
         from alembic.config import Config
         from alembic import command
@@ -119,6 +128,13 @@ def run_alembic_upgrade(db_url):
         logger.warning(f"Alembic migration failed, falling back to create_all: {e}")
         engine = create_engine(db_url)
         Base.metadata.create_all(engine)
+    finally:
+        _migrations_run = True
+
+
+def initialize_database(db_url):
+    """Initialize database by running migrations. Should be called once at startup."""
+    run_alembic_upgrade(db_url)
 
 
 def get_db_session(db_url):
@@ -127,7 +143,7 @@ def get_db_session(db_url):
     Session = sessionmaker(bind=engine)
     session = Session()
     
-    # Run Alembic migrations instead of create_all
+    # Ensure migrations have been run (will be skipped if already done)
     run_alembic_upgrade(db_url)
     
     return session
