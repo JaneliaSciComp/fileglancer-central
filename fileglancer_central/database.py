@@ -24,6 +24,16 @@ class FileSharePathDB(Base):
     linux_path = Column(String)
 
 
+class ExternalBucketDB(Base):
+    """Database model for storing external buckets"""
+    __tablename__ = 'external_buckets'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    full_path = Column(String)
+    external_url = Column(String)
+    fsp_name = Column(String, nullable=False)
+    relative_path = Column(String)
+    
+
 class LastRefreshDB(Base):
     """Database model for storing the last refresh time of the file share paths"""
     __tablename__ = 'last_refresh'
@@ -149,6 +159,17 @@ def update_file_share_paths(session, paths, table_last_updated, max_paths_to_del
     session.add(LastRefreshDB(source_last_updated=table_last_updated, db_last_updated=datetime.now(UTC)))
 
     session.commit()
+
+
+
+def update_external_buckets(session, buckets, table_last_updated):
+    """Update database with new external buckets"""
+    # Get all existing external buckets from database
+    existing_buckets = {bucket[0] for bucket in session.query(ExternalBucketDB.full_path).all()}
+    new_buckets = set()
+    num_existing = 0
+    num_new = 0
+
 
 
 def get_user_preference(session: Session, username: str, key: str) -> Optional[Dict]:
