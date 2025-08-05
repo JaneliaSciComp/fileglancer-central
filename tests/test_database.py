@@ -103,7 +103,7 @@ def test_last_refresh(db_session):
     paths = convert_table_to_file_share_paths(df)
     update_file_share_paths(db_session, paths, now)
     
-    refresh = get_last_refresh(db_session)
+    refresh = get_last_refresh(db_session, "file_share_paths")
     assert refresh is not None
     assert refresh.source_last_updated == now
 

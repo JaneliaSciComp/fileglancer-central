@@ -28,7 +28,7 @@ from x2s3.client_file import FileProxyClient
 def _cache_wiki_paths(db_url, force_refresh=False):
     with db.get_db_session(db_url) as session:
         # Get the last refresh time from the database
-        last_refresh = db.get_last_refresh(session)
+        last_refresh = db.get_last_refresh(session, "file_share_paths")
 
         # Check if we need to refresh the file share paths
         if not last_refresh or (datetime.now() - last_refresh.db_last_updated).days >= 1 or force_refresh:

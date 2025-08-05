@@ -35,9 +35,10 @@ class ExternalBucketDB(Base):
     
 
 class LastRefreshDB(Base):
-    """Database model for storing the last refresh time of the file share paths"""
+    """Database model for storing the last refresh time of tables"""
     __tablename__ = 'last_refresh'
     id = Column(Integer, primary_key=True, autoincrement=True)
+    table_name = Column(String, nullable=False, index=True)
     source_last_updated = Column(DateTime, nullable=False)
     db_last_updated = Column(DateTime, nullable=False)
 
@@ -93,12 +94,42 @@ class TicketDB(Base):
     # )
 
 
+def run_alembic_upgrade(db_url):
+    """Run Alembic migrations to upgrade database to latest version"""
+    try:
+        from alembic.config import Config
+        from alembic import command
+        import os
+        
+        # Get the directory containing this file
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.dirname(current_dir)
+        alembic_cfg_path = os.path.join(project_root, "alembic.ini")
+        
+        if os.path.exists(alembic_cfg_path):
+            alembic_cfg = Config(alembic_cfg_path)
+            alembic_cfg.set_main_option("sqlalchemy.url", db_url)
+            command.upgrade(alembic_cfg, "head")
+            logger.info("Alembic migrations completed successfully")
+        else:
+            logger.warning("Alembic configuration not found, falling back to create_all")
+            engine = create_engine(db_url)
+            Base.metadata.create_all(engine)
+    except Exception as e:
+        logger.warning(f"Alembic migration failed, falling back to create_all: {e}")
+        engine = create_engine(db_url)
+        Base.metadata.create_all(engine)
+
+
 def get_db_session(db_url):
     """Create and return a database session"""
     engine = create_engine(db_url)
     Session = sessionmaker(bind=engine)
     session = Session()
-    Base.metadata.create_all(engine)
+    
+    # Run Alembic migrations instead of create_all
+    run_alembic_upgrade(db_url)
+    
     return session
 
 
@@ -107,9 +138,9 @@ def get_all_paths(session):
     return session.query(FileSharePathDB).all()
 
 
-def get_last_refresh(session):
-    """Get the last refresh time from the database"""
-    return session.query(LastRefreshDB).first()
+def get_last_refresh(session, table_name: str):
+    """Get the last refresh time from the database for a specific table"""
+    return session.query(LastRefreshDB).filter_by(table_name=table_name).first()
 
 
 def update_file_share_paths(session, paths, table_last_updated, max_paths_to_delete=2):
@@ -155,8 +186,9 @@ def update_file_share_paths(session, paths, table_last_updated, max_paths_to_del
             session.query(FileSharePathDB).filter(FileSharePathDB.linux_path.in_(paths_to_delete)).delete(synchronize_session='fetch')
 
     # Update last refresh time
-    session.query(LastRefreshDB).delete()
-    session.add(LastRefreshDB(source_last_updated=table_last_updated, db_last_updated=datetime.now(UTC)))
+    table_name = "file_share_paths"
+    session.query(LastRefreshDB).filter_by(table_name=table_name).delete()
+    session.add(LastRefreshDB(table_name=table_name, source_last_updated=table_last_updated, db_last_updated=datetime.now(UTC)))
 
     session.commit()
 
@@ -169,6 +201,39 @@ def update_external_buckets(session, buckets, table_last_updated):
     new_buckets = set()
     num_existing = 0
     num_new = 0
+
+    # Update or insert records
+    for bucket in buckets:
+        new_buckets.add(bucket.full_path)
+        
+        # Check if bucket exists
+        existing_record = session.query(ExternalBucketDB).filter_by(full_path=bucket.full_path).first()
+        
+        if existing_record:
+            # Update existing record
+            existing_record.external_url = bucket.external_url
+            existing_record.fsp_name = bucket.fsp_name
+            existing_record.relative_path = bucket.relative_path
+            num_existing += 1
+        else:
+            # Create new record
+            session.add(bucket)
+            num_new += 1
+
+    logger.debug(f"Updated {num_existing} external buckets, added {num_new} external buckets")
+
+    # Delete records that no longer exist
+    buckets_to_delete = existing_buckets - new_buckets
+    if buckets_to_delete:
+        logger.debug(f"Deleting {len(buckets_to_delete)} defunct external buckets from the database")
+        session.query(ExternalBucketDB).filter(ExternalBucketDB.full_path.in_(buckets_to_delete)).delete(synchronize_session='fetch')
+
+    # Update last refresh time
+    table_name = "external_buckets"
+    session.query(LastRefreshDB).filter_by(table_name=table_name).delete()
+    session.add(LastRefreshDB(table_name=table_name, source_last_updated=table_last_updated, db_last_updated=datetime.now(UTC)))
+
+    session.commit()
 
 
 
