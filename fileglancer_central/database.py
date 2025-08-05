@@ -33,7 +33,7 @@ class ExternalBucketDB(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     full_path = Column(String)
     external_url = Column(String)
-    fsp_name = Column(String, nullable=False)
+    fsp_name = Column(String)  # Made nullable for processing
     relative_path = Column(String)
     
 
@@ -217,6 +217,9 @@ def update_file_share_paths(session, paths, table_last_updated, max_paths_to_del
 
 def update_external_buckets(session, buckets, table_last_updated):
     """Update database with new external buckets"""
+    # Get all file share paths to determine fsp_name and relative_path
+    all_fsp = session.query(FileSharePathDB).all()
+    
     # Get all existing external buckets from database
     existing_buckets = {bucket[0] for bucket in session.query(ExternalBucketDB.full_path).all()}
     new_buckets = set()
@@ -227,18 +230,39 @@ def update_external_buckets(session, buckets, table_last_updated):
     for bucket in buckets:
         new_buckets.add(bucket.full_path)
         
+        # Determine fsp_name and relative_path by finding matching FileSharePathDB
+        fsp_name = None
+        relative_path = None
+        
+        for fsp in all_fsp:
+            if bucket.full_path.startswith(fsp.mount_path):
+                fsp_name = fsp.name
+                # Remove the mount_path prefix and any leading slash
+                relative_path = bucket.full_path[len(fsp.mount_path):].lstrip('/')
+                break
+        
+        if fsp_name is None:
+            logger.warning(f"Could not find matching file share path for external bucket: {bucket.full_path}")
+            continue  # Skip buckets without matching file share paths
+        
         # Check if bucket exists
         existing_record = session.query(ExternalBucketDB).filter_by(full_path=bucket.full_path).first()
         
         if existing_record:
             # Update existing record
             existing_record.external_url = bucket.external_url
-            existing_record.fsp_name = bucket.fsp_name
-            existing_record.relative_path = bucket.relative_path
+            existing_record.fsp_name = fsp_name
+            existing_record.relative_path = relative_path
             num_existing += 1
         else:
-            # Create new record
-            session.add(bucket)
+            # Create new record with determined fsp_name and relative_path
+            new_bucket = ExternalBucketDB(
+                full_path=bucket.full_path,
+                external_url=bucket.external_url,
+                fsp_name=fsp_name,
+                relative_path=relative_path
+            )
+            session.add(new_bucket)
             num_new += 1
 
     logger.debug(f"Updated {num_existing} external buckets, added {num_new} external buckets")

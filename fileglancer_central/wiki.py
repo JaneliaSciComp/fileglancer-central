@@ -131,19 +131,13 @@ def get_external_buckets():
                 logger.debug(f"Skipping bucket with null values: full_path={full_path}, external_url={external_url}")
                 continue
                 
-            # Split path into fsp_name and relative path
-            path_parts = full_path.split('/', 2)
-            if len(path_parts) >= 2:
-                fsp_name = path_parts[1]  # First component after leading slash
-                relative_path = path_parts[2] if len(path_parts) > 2 else ''
-                
-                bucket = ExternalBucketDB(
-                    full_path=full_path,
-                    external_url=external_url,
-                    fsp_name=fsp_name,
-                    relative_path=relative_path
-                )
-                all_buckets.append(bucket)
+            bucket = ExternalBucketDB(
+                full_path=full_path,
+                external_url=external_url,
+                fsp_name=None,  # Will be determined in database.update_external_buckets
+                relative_path=None  # Will be determined in database.update_external_buckets
+            )
+            all_buckets.append(bucket)
     
     buckets = all_buckets
 
