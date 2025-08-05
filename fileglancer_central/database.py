@@ -33,7 +33,7 @@ class ExternalBucketDB(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     full_path = Column(String)
     external_url = Column(String)
-    fsp_name = Column(String)  # Made nullable for processing
+    fsp_name = Column(String, nullable=False)
     relative_path = Column(String)
     
 
@@ -173,26 +173,37 @@ def update_file_share_paths(session, paths, table_last_updated, max_paths_to_del
     num_new = 0
 
     # Update or insert records
-    for path in paths:
-        new_paths.add(path.mount_path)
+    for path_dict in paths:
+        mount_path = path_dict['mount_path']
+        new_paths.add(mount_path)
         
         # Check if path exists
-        existing_record = session.query(FileSharePathDB).filter_by(mount_path=path.mount_path).first()
+        existing_record = session.query(FileSharePathDB).filter_by(mount_path=mount_path).first()
         
         if existing_record:
             # Update existing record
-            existing_record.name = path.name
-            existing_record.zone = path.zone
-            existing_record.group = path.group
-            existing_record.storage = path.storage
-            existing_record.mount_path = path.mount_path
-            existing_record.mac_path = path.mac_path
-            existing_record.windows_path = path.windows_path
-            existing_record.linux_path = path.linux_path
+            existing_record.name = path_dict['name']
+            existing_record.zone = path_dict['zone']
+            existing_record.group = path_dict['group']
+            existing_record.storage = path_dict['storage']
+            existing_record.mount_path = path_dict['mount_path']
+            existing_record.mac_path = path_dict['mac_path']
+            existing_record.windows_path = path_dict['windows_path']
+            existing_record.linux_path = path_dict['linux_path']
             num_existing += 1
         else:
-            # Create new record
-            session.add(path)
+            # Create new record from dictionary
+            new_path = FileSharePathDB(
+                name=path_dict['name'],
+                zone=path_dict['zone'],
+                group=path_dict['group'],
+                storage=path_dict['storage'],
+                mount_path=path_dict['mount_path'],
+                mac_path=path_dict['mac_path'],
+                windows_path=path_dict['windows_path'],
+                linux_path=path_dict['linux_path']
+            )
+            session.add(new_path)
             num_new += 1
 
     logger.debug(f"Updated {num_existing} file share paths, added {num_new} file share paths")
@@ -227,38 +238,40 @@ def update_external_buckets(session, buckets, table_last_updated):
     num_new = 0
 
     # Update or insert records
-    for bucket in buckets:
-        new_buckets.add(bucket.full_path)
+    for bucket_dict in buckets:
+        full_path = bucket_dict['full_path']
+        external_url = bucket_dict['external_url']
+        new_buckets.add(full_path)
         
         # Determine fsp_name and relative_path by finding matching FileSharePathDB
         fsp_name = None
         relative_path = None
         
         for fsp in all_fsp:
-            if bucket.full_path.startswith(fsp.mount_path):
+            if full_path.startswith(fsp.mount_path):
                 fsp_name = fsp.name
                 # Remove the mount_path prefix and any leading slash
-                relative_path = bucket.full_path[len(fsp.mount_path):].lstrip('/')
+                relative_path = full_path[len(fsp.mount_path):].lstrip('/')
                 break
         
         if fsp_name is None:
-            logger.warning(f"Could not find matching file share path for external bucket: {bucket.full_path}")
+            logger.warning(f"Could not find matching file share path for external bucket: {full_path}")
             continue  # Skip buckets without matching file share paths
         
         # Check if bucket exists
-        existing_record = session.query(ExternalBucketDB).filter_by(full_path=bucket.full_path).first()
+        existing_record = session.query(ExternalBucketDB).filter_by(full_path=full_path).first()
         
         if existing_record:
             # Update existing record
-            existing_record.external_url = bucket.external_url
+            existing_record.external_url = external_url
             existing_record.fsp_name = fsp_name
             existing_record.relative_path = relative_path
             num_existing += 1
         else:
             # Create new record with determined fsp_name and relative_path
             new_bucket = ExternalBucketDB(
-                full_path=bucket.full_path,
-                external_url=bucket.external_url,
+                full_path=full_path,
+                external_url=external_url,
                 fsp_name=fsp_name,
                 relative_path=relative_path
             )

@@ -15,7 +15,7 @@ from fastapi.exceptions import RequestValidationError, StarletteHTTPException
 from fileglancer_central import database as db
 from fileglancer_central.model import FileSharePath, FileSharePathResponse, Ticket, ProxiedPath, ProxiedPathResponse, ExternalBucket, ExternalBucketResponse
 from fileglancer_central.settings import get_settings
-from fileglancer_central.wiki import get_file_share_paths_table, convert_table_to_file_share_paths, get_external_buckets
+from fileglancer_central.wiki import get_file_share_paths, get_external_buckets
 from fileglancer_central.issues import create_jira_ticket, get_jira_ticket_details, delete_jira_ticket
 from fileglancer_central.utils import slugify_path
 from fileglancer_central.proxy_context import ProxyContext, AccessFlagsProxyContext
@@ -36,10 +36,9 @@ def _cache_wiki_paths(db_url, force_refresh=False):
             
             try:
                 # Get updated paths from the wiki
-                table, table_last_updated = get_file_share_paths_table()
-                new_paths = convert_table_to_file_share_paths(table)
+                new_paths, table_last_updated = get_file_share_paths()
                 if not last_refresh or table_last_updated != last_refresh.source_last_updated:
-                    logger.info("Wiki table has changed, refreshing file share paths...")
+                    logger.info("Wiki has changed, refreshing file share paths...")
                     db.update_file_share_paths(session, new_paths, table_last_updated)
             except Exception as e:
                 logger.error(f"Error updating wiki paths: {e}")
@@ -69,7 +68,7 @@ def _cache_external_buckets(db_url, force_refresh=False):
                 # Get updated buckets from the wiki
                 new_buckets, table_last_updated = get_external_buckets()
                 if not last_refresh or table_last_updated != last_refresh.source_last_updated:
-                    logger.info("Wiki table has changed, refreshing external buckets...")
+                    logger.info("Wiki has changed, refreshing external buckets...")
                     db.update_external_buckets(session, new_buckets, table_last_updated)
             except Exception as e:
                 logger.error(f"Error updating external buckets: {e}")
