@@ -25,7 +25,7 @@ from x2s3.client_file import FileProxyClient
 
 
 
-def _cache_wiki_paths(db_url, force_refresh=False):
+def _get_synced_wiki_paths(db_url, force_refresh=False):
     with db.get_db_session(db_url) as session:
         # Get the last refresh time from the database
         last_refresh = db.get_last_refresh(session, "file_share_paths")
@@ -55,7 +55,7 @@ def _cache_wiki_paths(db_url, force_refresh=False):
         ) for path in db.get_all_paths(session)]
 
 
-def _cache_external_buckets(db_url, force_refresh=False):
+def _get_synced_external_buckets(db_url, force_refresh=False):
     with db.get_db_session(db_url) as session:
         # Get the last refresh time from the database
         last_refresh = db.get_last_refresh(session, "external_buckets")
@@ -199,7 +199,7 @@ def create_app(settings):
             raise HTTPException(status_code=500, detail="Confluence is not configured")
         
         if atlassian_url:
-            paths = _cache_wiki_paths(settings.db_url, force_refresh)
+            paths = _get_synced_wiki_paths(settings.db_url, force_refresh)
         else:
             paths = [FileSharePath(
                 name=slugify_path(path),
@@ -217,14 +217,17 @@ def create_app(settings):
     @app.get("/external-buckets", response_model=ExternalBucketResponse,
              description="Get all external buckets from the database")
     async def get_external_buckets(force_refresh: bool = False) -> ExternalBucketResponse:
-        
-        atlassian_url = settings.atlassian_url
-        if not atlassian_url:
-            logger.error("You must configure `atlassian_url` to fetch external buckets.")
-            raise HTTPException(status_code=500, detail="Confluence is not configured")
-        
-        buckets = _cache_external_buckets(settings.db_url, force_refresh)
+        buckets = _get_synced_external_buckets(settings.db_url, force_refresh)
         return ExternalBucketResponse(buckets=buckets)
+
+
+    @app.get("/external-buckets/{fsp_name}", response_model=ExternalBucketResponse,
+             description="Get the external buckets for a given FSP name")
+    async def get_external_buckets(fsp_name: str) -> ExternalBucket:
+        buckets = _get_synced_external_buckets(settings.db_url, False)
+        filtered_buckets = [bucket for bucket in buckets if bucket.fsp_name == fsp_name]
+        return ExternalBucketResponse(buckets=filtered_buckets)
+        
 
     @app.post("/ticket", response_model=Ticket,
               description="Create a new ticket and return the key")
