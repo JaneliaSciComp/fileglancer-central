@@ -143,9 +143,6 @@ def get_db_session(db_url):
     Session = sessionmaker(bind=engine)
     session = Session()
     
-    # Ensure migrations have been run (will be skipped if already done)
-    run_alembic_upgrade(db_url)
-    
     return session
 
 
