@@ -9,6 +9,9 @@ from loguru import logger
 
 SHARING_KEY_LENGTH = 12
 
+# Global flag to track if migrations have been run
+_migrations_run = False
+
 Base = declarative_base()
 class FileSharePathDB(Base):
     """Database model for storing file share paths"""
@@ -24,10 +27,21 @@ class FileSharePathDB(Base):
     linux_path = Column(String)
 
 
+class ExternalBucketDB(Base):
+    """Database model for storing external buckets"""
+    __tablename__ = 'external_buckets'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    full_path = Column(String)
+    external_url = Column(String)
+    fsp_name = Column(String, nullable=False)
+    relative_path = Column(String)
+    
+
 class LastRefreshDB(Base):
-    """Database model for storing the last refresh time of the file share paths"""
+    """Database model for storing the last refresh time of tables"""
     __tablename__ = 'last_refresh'
     id = Column(Integer, primary_key=True, autoincrement=True)
+    table_name = Column(String, nullable=False, index=True)
     source_last_updated = Column(DateTime, nullable=False)
     db_last_updated = Column(DateTime, nullable=False)
 
@@ -83,12 +97,52 @@ class TicketDB(Base):
     # )
 
 
+def run_alembic_upgrade(db_url):
+    """Run Alembic migrations to upgrade database to latest version"""
+    global _migrations_run
+    
+    if _migrations_run:
+        logger.debug("Migrations already run, skipping")
+        return
+    
+    try:
+        from alembic.config import Config
+        from alembic import command
+        import os
+        
+        # Get the directory containing this file
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.dirname(current_dir)
+        alembic_cfg_path = os.path.join(project_root, "alembic.ini")
+        
+        if os.path.exists(alembic_cfg_path):
+            alembic_cfg = Config(alembic_cfg_path)
+            alembic_cfg.set_main_option("sqlalchemy.url", db_url)
+            command.upgrade(alembic_cfg, "head")
+            logger.info("Alembic migrations completed successfully")
+        else:
+            logger.warning("Alembic configuration not found, falling back to create_all")
+            engine = create_engine(db_url)
+            Base.metadata.create_all(engine)
+    except Exception as e:
+        logger.warning(f"Alembic migration failed, falling back to create_all: {e}")
+        engine = create_engine(db_url)
+        Base.metadata.create_all(engine)
+    finally:
+        _migrations_run = True
+
+
+def initialize_database(db_url):
+    """Initialize database by running migrations. Should be called once at startup."""
+    run_alembic_upgrade(db_url)
+
+
 def get_db_session(db_url):
     """Create and return a database session"""
     engine = create_engine(db_url)
     Session = sessionmaker(bind=engine)
     session = Session()
-    Base.metadata.create_all(engine)
+    
     return session
 
 
@@ -97,9 +151,14 @@ def get_all_paths(session):
     return session.query(FileSharePathDB).all()
 
 
-def get_last_refresh(session):
-    """Get the last refresh time from the database"""
-    return session.query(LastRefreshDB).first()
+def get_all_external_buckets(session):
+    """Get all external buckets from the database"""
+    return session.query(ExternalBucketDB).all()
+
+
+def get_last_refresh(session, table_name: str):
+    """Get the last refresh time from the database for a specific table"""
+    return session.query(LastRefreshDB).filter_by(table_name=table_name).first()
 
 
 def update_file_share_paths(session, paths, table_last_updated, max_paths_to_delete=2):
@@ -111,26 +170,37 @@ def update_file_share_paths(session, paths, table_last_updated, max_paths_to_del
     num_new = 0
 
     # Update or insert records
-    for path in paths:
-        new_paths.add(path.mount_path)
+    for path_dict in paths:
+        mount_path = path_dict['mount_path']
+        new_paths.add(mount_path)
         
         # Check if path exists
-        existing_record = session.query(FileSharePathDB).filter_by(mount_path=path.mount_path).first()
+        existing_record = session.query(FileSharePathDB).filter_by(mount_path=mount_path).first()
         
         if existing_record:
             # Update existing record
-            existing_record.name = path.name
-            existing_record.zone = path.zone
-            existing_record.group = path.group
-            existing_record.storage = path.storage
-            existing_record.mount_path = path.mount_path
-            existing_record.mac_path = path.mac_path
-            existing_record.windows_path = path.windows_path
-            existing_record.linux_path = path.linux_path
+            existing_record.name = path_dict['name']
+            existing_record.zone = path_dict['zone']
+            existing_record.group = path_dict['group']
+            existing_record.storage = path_dict['storage']
+            existing_record.mount_path = path_dict['mount_path']
+            existing_record.mac_path = path_dict['mac_path']
+            existing_record.windows_path = path_dict['windows_path']
+            existing_record.linux_path = path_dict['linux_path']
             num_existing += 1
         else:
-            # Create new record
-            session.add(path)
+            # Create new record from dictionary
+            new_path = FileSharePathDB(
+                name=path_dict['name'],
+                zone=path_dict['zone'],
+                group=path_dict['group'],
+                storage=path_dict['storage'],
+                mount_path=path_dict['mount_path'],
+                mac_path=path_dict['mac_path'],
+                windows_path=path_dict['windows_path'],
+                linux_path=path_dict['linux_path']
+            )
+            session.add(new_path)
             num_new += 1
 
     logger.debug(f"Updated {num_existing} file share paths, added {num_new} file share paths")
@@ -145,8 +215,78 @@ def update_file_share_paths(session, paths, table_last_updated, max_paths_to_del
             session.query(FileSharePathDB).filter(FileSharePathDB.linux_path.in_(paths_to_delete)).delete(synchronize_session='fetch')
 
     # Update last refresh time
-    session.query(LastRefreshDB).delete()
-    session.add(LastRefreshDB(source_last_updated=table_last_updated, db_last_updated=datetime.now(UTC)))
+    table_name = "file_share_paths"
+    session.query(LastRefreshDB).filter_by(table_name=table_name).delete()
+    session.add(LastRefreshDB(table_name=table_name, source_last_updated=table_last_updated, db_last_updated=datetime.now(UTC)))
+
+    session.commit()
+
+
+
+def update_external_buckets(session, buckets, table_last_updated):
+    """Update database with new external buckets"""
+    # Get all file share paths to determine fsp_name and relative_path
+    all_fsp = session.query(FileSharePathDB).all()
+    
+    # Get all existing external buckets from database
+    existing_buckets = {bucket[0] for bucket in session.query(ExternalBucketDB.full_path).all()}
+    new_buckets = set()
+    num_existing = 0
+    num_new = 0
+
+    # Update or insert records
+    for bucket_dict in buckets:
+        full_path = bucket_dict['full_path']
+        external_url = bucket_dict['external_url']
+        new_buckets.add(full_path)
+        
+        # Determine fsp_name and relative_path by finding matching FileSharePathDB
+        fsp_name = None
+        relative_path = None
+        
+        for fsp in all_fsp:
+            if full_path.startswith(fsp.mount_path):
+                fsp_name = fsp.name
+                # Remove the mount_path prefix and any leading slash
+                relative_path = full_path[len(fsp.mount_path):].lstrip('/')
+                break
+        
+        if fsp_name is None:
+            logger.warning(f"Could not find matching file share path for external bucket: {full_path}")
+            continue  # Skip buckets without matching file share paths
+        
+        # Check if bucket exists
+        existing_record = session.query(ExternalBucketDB).filter_by(full_path=full_path).first()
+        
+        if existing_record:
+            # Update existing record
+            existing_record.external_url = external_url
+            existing_record.fsp_name = fsp_name
+            existing_record.relative_path = relative_path
+            num_existing += 1
+        else:
+            # Create new record with determined fsp_name and relative_path
+            new_bucket = ExternalBucketDB(
+                full_path=full_path,
+                external_url=external_url,
+                fsp_name=fsp_name,
+                relative_path=relative_path
+            )
+            session.add(new_bucket)
+            num_new += 1
+
+    logger.debug(f"Updated {num_existing} external buckets, added {num_new} external buckets")
+
+    # Delete records that no longer exist
+    buckets_to_delete = existing_buckets - new_buckets
+    if buckets_to_delete:
+        logger.debug(f"Deleting {len(buckets_to_delete)} defunct external buckets from the database")
+        session.query(ExternalBucketDB).filter(ExternalBucketDB.full_path.in_(buckets_to_delete)).delete(synchronize_session='fetch')
+
+    # Update last refresh time
+    table_name = "external_buckets"
+    session.query(LastRefreshDB).filter_by(table_name=table_name).delete()
+    session.add(LastRefreshDB(table_name=table_name, source_last_updated=table_last_updated, db_last_updated=datetime.now(UTC)))
 
     session.commit()
 

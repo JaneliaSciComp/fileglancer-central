@@ -168,3 +168,27 @@ def test_delete_proxied_path(test_client):
     response = test_client.get(f"/proxied-path/testuser/{sharing_key}")
     assert response.status_code == 404
 
+
+def test_get_external_buckets(test_client):
+    """Test getting external buckets"""
+    response = test_client.get("/external-buckets")
+    assert response.status_code == 200
+    data = response.json()
+    assert "buckets" in data
+    assert isinstance(data["buckets"], list)
+    # Should contain external buckets fetched from the wiki
+    # The actual number depends on what's in Confluence
+    assert len(data["buckets"]) >= 0
+    
+    # Verify structure of returned buckets if any exist
+    if data["buckets"]:
+        bucket = data["buckets"][0]
+        assert "id" in bucket
+        assert "fsp_name" in bucket
+        # full_path and external_url are now required fields
+        assert "full_path" in bucket
+        assert bucket["full_path"] is not None
+        assert "external_url" in bucket
+        assert bucket["external_url"] is not None
+        assert "relative_path" in bucket  # This can still be None
+

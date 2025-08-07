@@ -21,6 +21,7 @@ dependencies = [
     "uvicorn >=0.34",
     "sqlalchemy >=2.0",
     "aiosqlite >=0.21.0",
+    "alembic >=1.13.0",
     "pandas >=2.2.3",
     "pydantic >=2.10",
     "pydantic-settings >=2.8",
@@ -54,6 +55,8 @@ platforms = ["osx-arm64", "osx-64", "linux-64"]
 dev-install = "pip install -e ."
 dev-launch = "pixi run uvicorn fileglancer_central.app:app --port 7878 --reload"
 dev-launch-remote = "pixi run uvicorn fileglancer_central.app:app --host 0.0.0.0 --port 7878 --reload --ssl-keyfile /opt/certs/cert.key --ssl-certfile /opt/certs/cert.crt"
+migrate = "alembic upgrade head"
+migrate-create = "alembic revision --autogenerate"
 
 [tool.pixi.feature.test.tasks]
 test-install = "pip install -e ."

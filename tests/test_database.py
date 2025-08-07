@@ -8,7 +8,21 @@ import pandas as pd
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from fileglancer_central.database import *
-from fileglancer_central.wiki import convert_table_to_file_share_paths
+# Removed wiki import - tests now create dictionaries directly
+from fileglancer_central.utils import slugify_path
+
+def create_file_share_path_dicts(df):
+    """Helper function to create file share path dictionaries from DataFrame"""
+    return [{
+        'name': slugify_path(row.linux_path),
+        'zone': row.lab,
+        'group': row.group,
+        'storage': row.storage,
+        'mount_path': row.linux_path,
+        'mac_path': row.mac_path,
+        'windows_path': row.windows_path,
+        'linux_path': row.linux_path,
+    } for row in df.itertuples(index=False)]
 
 @pytest.fixture
 def temp_dir():
@@ -74,7 +88,7 @@ def test_file_share_paths(db_session):
     df = pd.DataFrame(data)
     
     # Test update_file_share_paths
-    paths = convert_table_to_file_share_paths(df)
+    paths = create_file_share_path_dicts(df)
     update_file_share_paths(db_session, paths, datetime.now())
     
     # Test get_all_paths
@@ -86,7 +100,7 @@ def test_file_share_paths(db_session):
     # Test updating existing paths
     data['lab'] = ['lab1_updated', 'lab2_updated']
     df = pd.DataFrame(data)
-    paths = convert_table_to_file_share_paths(df)
+    paths = create_file_share_path_dicts(df)
     update_file_share_paths(db_session, paths, datetime.now())
     
     paths = get_all_paths(db_session)
@@ -100,10 +114,10 @@ def test_last_refresh(db_session):
             'linux_path': ['/path1'], 'mac_path': ['mac1'], 'windows_path': ['win1']}
     df = pd.DataFrame(data)
     
-    paths = convert_table_to_file_share_paths(df)
+    paths = create_file_share_path_dicts(df)
     update_file_share_paths(db_session, paths, now)
     
-    refresh = get_last_refresh(db_session)
+    refresh = get_last_refresh(db_session, "file_share_paths")
     assert refresh is not None
     assert refresh.source_last_updated == now
 
@@ -119,7 +133,7 @@ def test_max_paths_to_delete(db_session):
         'windows_path': ['win1', 'win2', 'win3']
     }
     df = pd.DataFrame(data)
-    paths = convert_table_to_file_share_paths(df)
+    paths = create_file_share_path_dicts(df)
     update_file_share_paths(db_session, paths, datetime.now())
     
     # Update with fewer paths (should trigger deletion limit)
@@ -132,7 +146,7 @@ def test_max_paths_to_delete(db_session):
         'windows_path': ['win1']
     }
     df = pd.DataFrame(data)
-    paths = convert_table_to_file_share_paths(df)
+    paths = create_file_share_path_dicts(df)
     # With max_paths_to_delete=1, should not delete paths
     update_file_share_paths(db_session, paths, datetime.now(), max_paths_to_delete=1)
     paths = get_all_paths(db_session)
