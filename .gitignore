@@ -180,3 +180,8 @@ cython_debug/
 
 # config
 config.yaml
+
+
+# AI assistants
+.claude
+CLAUDE.md
