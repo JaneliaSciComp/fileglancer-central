@@ -250,7 +250,7 @@ def create_app(settings):
                     if created_at_str.endswith("Z"):
                         created_at_str = created_at_str[:-1] + "+00:00"
                     created_at = datetime.fromisoformat(created_at_str)
-                    
+
                     expires_at = None
                     if item.get("expires_at") and item.get("expires_at") != "null":
                         expires_at_str = str(item["expires_at"])
@@ -259,7 +259,10 @@ def create_app(settings):
                         expires_at = datetime.fromisoformat(expires_at_str)
 
                     # Only include active notifications that haven't expired
-                    if item["active"] and (expires_at is None or expires_at > current_time):
+                    is_active = item["active"]
+                    is_not_expired = expires_at is None or expires_at > current_time
+
+                    if is_active and is_not_expired:
                         notifications.append(Notification(
                             id=item["id"],
                             type=item["type"],
