@@ -1,9 +1,10 @@
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from functools import cache
 from typing import List, Optional, Dict, Tuple
 
+import yaml
 from loguru import logger
 from pydantic import HttpUrl
 from contextlib import asynccontextmanager
@@ -13,7 +14,7 @@ from fastapi.responses import RedirectResponse, Response,JSONResponse, PlainText
 from fastapi.exceptions import RequestValidationError, StarletteHTTPException
 
 from fileglancer_central import database as db
-from fileglancer_central.model import FileSharePath, FileSharePathResponse, Ticket, ProxiedPath, ProxiedPathResponse, ExternalBucket, ExternalBucketResponse
+from fileglancer_central.model import FileSharePath, FileSharePathResponse, Ticket, ProxiedPath, ProxiedPathResponse, ExternalBucket, ExternalBucketResponse, Notification, NotificationResponse
 from fileglancer_central.settings import get_settings
 from fileglancer_central.wiki import get_file_share_paths, get_external_buckets
 from fileglancer_central.issues import create_jira_ticket, get_jira_ticket_details, delete_jira_ticket
@@ -33,7 +34,7 @@ def _get_synced_wiki_paths(db_url, force_refresh=False):
         # Check if we need to refresh the file share paths
         if not last_refresh or (datetime.now() - last_refresh.db_last_updated).days >= 1 or force_refresh:
             logger.info("Last refresh was more than a day ago, checking for updates...")
-            
+
             try:
                 # Get updated paths from the wiki
                 new_paths, table_last_updated = get_file_share_paths()
@@ -49,7 +50,7 @@ def _get_synced_wiki_paths(db_url, force_refresh=False):
             group=path.group,
             storage=path.storage,
             mount_path=path.mount_path,
-            mac_path=path.mac_path, 
+            mac_path=path.mac_path,
             windows_path=path.windows_path,
             linux_path=path.linux_path,
         ) for path in db.get_all_paths(session)]
@@ -63,7 +64,7 @@ def _get_synced_external_buckets(db_url, force_refresh=False):
         # Check if we need to refresh the external buckets
         if not last_refresh or (datetime.now() - last_refresh.db_last_updated).days >= 1 or force_refresh:
             logger.info("Last refresh was more than a day ago, checking for updates...")
-            
+
             try:
                 # Get updated buckets from the wiki
                 new_buckets, table_last_updated = get_external_buckets()
@@ -110,8 +111,8 @@ def create_app(settings):
         else:
             with db.get_db_session(settings.db_url) as session:
                 return {fsp.name: fsp.mount_path for fsp in db.get_all_paths(session)}
-        
-        
+
+
     def _get_file_proxy_client(sharing_key: str, sharing_name: str) -> Tuple[FileProxyClient, ProxyContext] | Tuple[Response, None]:
         with db.get_db_session(settings.db_url) as session:
 
@@ -120,7 +121,7 @@ def create_app(settings):
                 return get_nosuchbucket_response(sharing_name), None
             if proxied_path.sharing_name != sharing_name:
                 return get_error_response(400, "InvalidArgument", f"Sharing name mismatch for sharing key {sharing_key}", sharing_name), None
-            
+
             # Create the appropriate proxy context based on the settings
             if settings.use_access_flags:
                 proxy_context = AccessFlagsProxyContext(proxied_path.username)
@@ -147,11 +148,11 @@ def create_app(settings):
         logger.trace(f"  db_url: {settings.db_url}")
         logger.trace(f"  use_access_flags: {settings.use_access_flags}")
         logger.trace(f"  atlassian_url: {settings.atlassian_url}")
-        
+
         # Initialize database (run migrations once at startup)
         logger.info("Initializing database...")
         db.initialize_database(settings.db_url)
-        
+
         logger.info(f"Server ready")
         yield
         # Cleanup (if needed)
@@ -176,7 +177,7 @@ def create_app(settings):
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(request, exc):
         return JSONResponse({"error":str(exc)}, status_code=400)
-    
+
 
     @app.get("/", include_in_schema=False)
     async def docs_redirect():
@@ -188,16 +189,16 @@ def create_app(settings):
         return """User-agent: *\nDisallow: /"""
 
 
-    @app.get("/file-share-paths", response_model=FileSharePathResponse, 
+    @app.get("/file-share-paths", response_model=FileSharePathResponse,
              description="Get all file share paths from the database")
     async def get_file_share_paths(force_refresh: bool = False) -> List[FileSharePath]:
-        
+
         atlassian_url = settings.atlassian_url
         file_share_mounts = settings.file_share_mounts
         if not atlassian_url and not file_share_mounts:
             logger.error("You must configure `atlassian_url` or set `file_share_mounts`.")
             raise HTTPException(status_code=500, detail="Confluence is not configured")
-        
+
         if atlassian_url:
             paths = _get_synced_wiki_paths(settings.db_url, force_refresh)
         else:
@@ -227,7 +228,60 @@ def create_app(settings):
         buckets = _get_synced_external_buckets(settings.db_url, False)
         filtered_buckets = [bucket for bucket in buckets if bucket.fsp_name == fsp_name]
         return ExternalBucketResponse(buckets=filtered_buckets)
-        
+
+
+    @app.get("/notifications", response_model=NotificationResponse,
+             description="Get all active notifications")
+    async def get_notifications() -> NotificationResponse:
+        try:
+            # Read notifications from YAML file
+            notifications_file = os.path.join(os.path.dirname(__file__), "..", "notifications.yaml")
+
+            with open(notifications_file, "r") as f:
+                data = yaml.safe_load(f)
+
+            notifications = []
+            current_time = datetime.now(timezone.utc)
+
+            for item in data.get("notifications", []):
+                try:
+                    # Parse datetime strings - handle Z suffix properly
+                    created_at_str = str(item["created_at"])
+                    if created_at_str.endswith("Z"):
+                        created_at_str = created_at_str[:-1] + "+00:00"
+                    created_at = datetime.fromisoformat(created_at_str)
+                    
+                    expires_at = None
+                    if item.get("expires_at") and item.get("expires_at") != "null":
+                        expires_at_str = str(item["expires_at"])
+                        if expires_at_str.endswith("Z"):
+                            expires_at_str = expires_at_str[:-1] + "+00:00"
+                        expires_at = datetime.fromisoformat(expires_at_str)
+
+                    # Only include active notifications that haven't expired
+                    if item["active"] and (expires_at is None or expires_at > current_time):
+                        notifications.append(Notification(
+                            id=item["id"],
+                            type=item["type"],
+                            title=item["title"],
+                            message=item["message"],
+                            active=item["active"],
+                            created_at=created_at,
+                            expires_at=expires_at
+                        ))
+                except Exception as e:
+                    logger.warning(f"Failed to parse notification {item.get('id', 'unknown')}: {e}")
+                    continue
+
+            return NotificationResponse(notifications=notifications)
+
+        except FileNotFoundError:
+            logger.warning("Notifications file not found")
+            return NotificationResponse(notifications=[])
+        except Exception as e:
+            logger.error(f"Error loading notifications: {e}")
+            return NotificationResponse(notifications=[])
+
 
     @app.post("/ticket", response_model=Ticket,
               description="Create a new ticket and return the key")
@@ -244,13 +298,13 @@ def create_app(settings):
             # Make ticket on JIRA
             jiraTicket = create_jira_ticket(
                 project_key=project_key,
-                issue_type=issue_type, 
+                issue_type=issue_type,
                 summary=summary,
                 description=description
             )
             if not jiraTicket or 'key' not in jiraTicket:
                 raise HTTPException(status_code=500, detail="Failed to create JIRA ticket")
-            
+
             # Save the ticket in the database
             with db.get_db_session(settings.db_url) as session:
                 dbTicket = db.create_ticket_entry(
@@ -262,10 +316,10 @@ def create_app(settings):
                 )
                 if dbTicket is None:
                     raise HTTPException(status_code=500, detail="Failed to create ticket entry in database")
-                
+
             # Get the full ticket details using the key
             ticket_details = get_jira_ticket_details(jiraTicket['key'])
-        
+
             return Ticket(
                 username=username,
                 fsp_name=fsp_name,
@@ -279,13 +333,13 @@ def create_app(settings):
                 link=ticket_details['link'],
                 comments=ticket_details['comments']
             )
-         
+
         except Exception as e:
             logger.error(f"Error creating ticket: {e}")
             raise HTTPException(status_code=500, detail=str(e))
-    
 
-    @app.get("/ticket/{username}", response_model=List[Ticket], 
+
+    @app.get("/ticket/{username}", response_model=List[Ticket],
              description="Retrieve tickets for a user")
     async def get_tickets(username: str = Path(..., description="The username of the user who created the tickets"),
                           fsp_name: Optional[str] = Query(None, description="The name of the file share path that the ticket is associated with"),
@@ -307,8 +361,8 @@ def create_app(settings):
                     ticket.comments = ticket_details['comments']
                 except Exception as e:
                     logger.error(f"Error retrieving details for ticket {ticket.ticket_key}: {e}")
-            return tickets 
-        
+            return tickets
+
 
     @app.delete("/ticket/{ticket_key}",
                 description="Delete a ticket by its key")
@@ -443,7 +497,7 @@ def create_app(settings):
         client, ctx = _get_file_proxy_client(sharing_key, sharing_name)
         if isinstance(client, Response):
             return client
-        
+
         if list_type:
             if list_type == 2:
                 with ctx:
