@@ -5,6 +5,8 @@ log_level: INFO
 
 #
 # Database URL
+# For SQLite: sqlite:///fileglancer.db
+# For PostgreSQL: postgresql://username:password@hostname:port/database_name
 #
 db_url: sqlite:///fileglancer.db
 
