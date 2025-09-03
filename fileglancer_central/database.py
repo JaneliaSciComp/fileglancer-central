@@ -117,7 +117,7 @@ def run_alembic_upgrade(db_url):
         
         if os.path.exists(alembic_cfg_path):
             alembic_cfg = Config(alembic_cfg_path)
-            alembic_cfg.set_main_option("sqlalchemy.url", db_url)
+            # Let alembic/env.py determine the database URL (supports db_admin_url)
             command.upgrade(alembic_cfg, "head")
             logger.info("Alembic migrations completed successfully")
         else:

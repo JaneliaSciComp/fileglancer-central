@@ -34,6 +34,9 @@ def get_database_url():
     """Get database URL from application settings"""
     try:
         settings = get_settings()
+        # Use admin URL for migrations if available, otherwise use regular URL
+        if hasattr(settings, 'db_admin_url') and settings.db_admin_url:
+            return settings.db_admin_url
         return settings.db_url
     except Exception as e:
         fallback_url = "sqlite:///./database.db"

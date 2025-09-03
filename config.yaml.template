@@ -4,13 +4,19 @@
 log_level: INFO
 
 #
-# Database URL
+# Database URL (runtime - unprivileged user)
 # For SQLite: sqlite:///fileglancer.db
 # For PostgreSQL: postgresql://username:password@hostname:port/database_name
 #
 db_url: sqlite:///fileglancer.db
 
-# 
+#
+# Database admin URL (migrations - privileged user)
+# If not specified, db_url will be used for migrations
+# For PostgreSQL: postgresql://admin_user:admin_password@hostname:port/database_name
+#
+# db_admin_url: postgresql://admin_user:admin_password@localhost/fileglancer
+
 # If true, use seteuid/setegid for file access
 # Set to False for local testing
 #
