@@ -44,8 +44,18 @@ release = [
     "twine"
 ]
 
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+include-package-data = true
+
 [tool.setuptools.packages.find]
-exclude = ["docker"]
+exclude = ["docker", "tests*"]
+
+[tool.setuptools.package-data]
+fileglancer_central = ["alembic.ini", "alembic/**/*"]
 
 [tool.pixi.project]
 channels = ["conda-forge"]

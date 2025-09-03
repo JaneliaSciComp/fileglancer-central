@@ -110,14 +110,35 @@ def run_alembic_upgrade(db_url):
         from alembic import command
         import os
         
-        # Get the directory containing this file
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        project_root = os.path.dirname(current_dir)
-        alembic_cfg_path = os.path.join(project_root, "alembic.ini")
+        alembic_cfg_path = None
         
-        if os.path.exists(alembic_cfg_path):
+        # Try to find alembic.ini - first in package directory, then development setup
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        
+        # Check if alembic.ini is in the package directory (installed package)
+        pkg_alembic_cfg_path = os.path.join(current_dir, "alembic.ini")
+        if os.path.exists(pkg_alembic_cfg_path):
+            alembic_cfg_path = pkg_alembic_cfg_path
+            logger.debug("Using packaged alembic.ini")
+        else:
+            # Fallback to development setup
+            project_root = os.path.dirname(current_dir)
+            dev_alembic_cfg_path = os.path.join(project_root, "alembic.ini")
+            if os.path.exists(dev_alembic_cfg_path):
+                alembic_cfg_path = dev_alembic_cfg_path
+                logger.debug("Using development alembic.ini")
+        
+        if alembic_cfg_path and os.path.exists(alembic_cfg_path):
             alembic_cfg = Config(alembic_cfg_path)
             alembic_cfg.set_main_option("sqlalchemy.url", db_url)
+            
+            # Update script_location for packaged installations
+            if alembic_cfg_path == pkg_alembic_cfg_path:
+                # Using packaged alembic.ini, also update script_location
+                pkg_alembic_dir = os.path.join(current_dir, "alembic")
+                if os.path.exists(pkg_alembic_dir):
+                    alembic_cfg.set_main_option("script_location", pkg_alembic_dir)
+            
             command.upgrade(alembic_cfg, "head")
             logger.info("Alembic migrations completed successfully")
         else:
