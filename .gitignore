@@ -181,6 +181,8 @@ cython_debug/
 # config
 config.yaml
 
+notifications.yaml
+
 
 # AI assistants
 .claude
