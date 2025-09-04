@@ -1,6 +1,6 @@
 [project]
 name = "fileglancer-central"
-version = "0.6.0"
+version = "0.7.3"
 readme = "README.md"
 authors = [
     { name = "Allison Truhlar", email = "truhlara@janelia.hhmi.org" },
@@ -44,8 +44,18 @@ release = [
     "twine"
 ]
 
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+include-package-data = true
+
 [tool.setuptools.packages.find]
-exclude = ["docker"]
+exclude = ["docker", "tests*"]
+
+[tool.setuptools.package-data]
+fileglancer_central = ["alembic.ini", "alembic/**/*"]
 
 [tool.pixi.project]
 channels = ["conda-forge"]
@@ -57,6 +67,7 @@ dev-launch = "pixi run uvicorn fileglancer_central.app:app --port 7878 --reload"
 dev-launch-remote = "pixi run uvicorn fileglancer_central.app:app --host 0.0.0.0 --port 7878 --reload --ssl-keyfile /opt/certs/cert.key --ssl-certfile /opt/certs/cert.crt"
 migrate = "alembic upgrade head"
 migrate-create = "alembic revision --autogenerate"
+stamp-db = "python -m fileglancer_central.stamp_db"
 
 [tool.pixi.feature.test.tasks]
 test-install = "pip install -e ."
