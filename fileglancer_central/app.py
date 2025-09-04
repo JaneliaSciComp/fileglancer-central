@@ -234,8 +234,9 @@ def create_app(settings):
              description="Get all active notifications")
     async def get_notifications() -> NotificationResponse:
         try:
-            # Read notifications from YAML file
-            notifications_file = os.path.join(os.path.dirname(__file__), "..", "notifications.yaml")
+            # Read notifications from YAML file in current working directory
+            notifications_file = os.path.join(os.getcwd(), "notifications.yaml")
+            logger.debug(f"Looking for notifications file at: {notifications_file}")
 
             with open(notifications_file, "r") as f:
                 data = yaml.safe_load(f)
