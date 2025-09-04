@@ -176,3 +176,35 @@ class ExternalBucketResponse(BaseModel):
     buckets: List[ExternalBucket] = Field(
         description="A list of external buckets"
     )
+
+
+class Notification(BaseModel):
+    """A notification message for users"""
+    id: int = Field(
+        description="The unique identifier for this notification"
+    )
+    type: str = Field(
+        description="The type of notification (info, warning, success, error)"
+    )
+    title: str = Field(
+        description="The title of the notification"
+    )
+    message: str = Field(
+        description="The notification message"
+    )
+    active: bool = Field(
+        description="Whether the notification is active"
+    )
+    created_at: datetime = Field(
+        description="When this notification was created"
+    )
+    expires_at: Optional[datetime] = Field(
+        description="When this notification expires (null for no expiration)",
+        default=None
+    )
+
+
+class NotificationResponse(BaseModel):
+    notifications: List[Notification] = Field(
+        description="A list of active notifications"
+    )
