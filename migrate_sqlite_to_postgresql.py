@@ -225,7 +225,7 @@ def migrate_table_data_raw(sqlite_engine, postgresql_engine, table_name: str) ->
         with postgresql_engine.connect() as postgresql_conn:
             # Create parameterized insert statement with conflict resolution
             placeholders = ', '.join([f":{col}" for col in column_names])
-            
+
             # Simple insert since tables are cleared first
             insert_sql = f"INSERT INTO {table_name} ({', '.join(column_names)}) VALUES ({placeholders})"
 
@@ -297,7 +297,7 @@ def perform_migration(sqlite_url: str, postgresql_url: str, skip_existing: bool 
         if not skip_existing:
             existing_data = False
             tables_with_data = []
-            
+
             # Check all tables that exist in SQLite
             for table_name in sqlite_tables:
                 model_class = get_model_for_table(table_name)
@@ -325,14 +325,14 @@ def perform_migration(sqlite_url: str, postgresql_url: str, skip_existing: bool 
                 response = input("\n🤔 PostgreSQL database already contains data. Clear existing data before migration? (y/N): ")
                 if response.lower() in ['y', 'yes']:
                     logger.info("🧹 Clearing existing data from PostgreSQL tables...")
-                    
+
                     # Clear tables in reverse dependency order to avoid FK issues
                     table_clear_order = ['user_preferences', 'proxied_paths', 'tickets', 'last_refresh', 'external_buckets', 'file_share_paths', 'alembic_version']
-                    
+
                     # Close existing sessions to avoid locks
                     sqlite_session.close()
                     postgresql_session.close()
-                    
+
                     for table_name in table_clear_order:
                         if table_name in tables_with_data:
                             logger.info(f"  Clearing table: {table_name}")
@@ -341,28 +341,28 @@ def perform_migration(sqlite_url: str, postgresql_url: str, skip_existing: bool 
                                 with postgresql_engine.connect() as conn:
                                     # Set a statement timeout to prevent hanging
                                     conn.execute(text("SET statement_timeout = '10s'"))
-                                    
+
                                     # Use DELETE instead of TRUNCATE to avoid locks
                                     result = conn.execute(text(f"DELETE FROM {table_name}"))
                                     deleted_count = result.rowcount if hasattr(result, 'rowcount') else 'unknown'
-                                    
+
                                     # Reset sequences if they exist
                                     try:
                                         conn.execute(text(f"ALTER SEQUENCE {table_name}_id_seq RESTART WITH 1"))
                                     except:
                                         pass  # Table might not have an id sequence
-                                    
+
                                     conn.commit()
-                                    
+
                                 logger.info(f"  ✅ Cleared table: {table_name} ({deleted_count} rows)")
                             except Exception as e:
                                 logger.error(f"  ❌ Failed to clear table {table_name}: {e}")
                                 return False
-                    
+
                     # Recreate sessions for migration
                     sqlite_session = SqliteSession()
                     postgresql_session = PostgresqlSession()
-                            
+
                     logger.info("✅ Data clearing completed")
                 else:
                     logger.info("Migration cancelled by user")
@@ -374,7 +374,7 @@ def perform_migration(sqlite_url: str, postgresql_url: str, skip_existing: bool 
 
         for table_name in sqlite_tables:
             logger.info(f"📋 Processing table: {table_name}")
-            
+
             # Handle alembic_version specially since it doesn't have a SQLAlchemy model
             if table_name == 'alembic_version':
                 logger.info(f"  Migrating Alembic version tracking table")
@@ -409,17 +409,17 @@ def perform_migration(sqlite_url: str, postgresql_url: str, skip_existing: bool 
 
         logger.info(f"🎉 Migration completed successfully!")
         logger.info(f"📊 Total records migrated: {total_records}")
-        
+
         # Stamp the PostgreSQL database with the latest Alembic version
         logger.info("🏷️  Stamping PostgreSQL database with latest Alembic version...")
         try:
             from alembic.config import Config
             from alembic import command
             import os
-            
+
             current_dir = os.path.dirname(os.path.abspath(__file__))
             alembic_cfg_path = os.path.join(current_dir, "alembic.ini")
-            
+
             if os.path.exists(alembic_cfg_path):
                 alembic_cfg = Config(alembic_cfg_path)
                 # Let alembic/env.py determine the database URL (it will use db_admin_url)
@@ -430,7 +430,7 @@ def perform_migration(sqlite_url: str, postgresql_url: str, skip_existing: bool 
         except Exception as e:
             logger.warning(f"⚠️  Could not stamp database with Alembic version: {e}")
             logger.info("💡 You may need to manually run: alembic stamp head")
-        
+
         logger.info(f"🔄 Next steps:")
         logger.info(f"   1. Update your config.yaml to use the PostgreSQL URL")
         logger.info(f"   2. Test your application with the new database")
