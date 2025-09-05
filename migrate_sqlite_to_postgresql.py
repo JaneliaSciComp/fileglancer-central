@@ -416,13 +416,34 @@ def perform_migration(sqlite_url: str, postgresql_url: str, skip_existing: bool 
             from alembic.config import Config
             from alembic import command
             import os
+            from fileglancer_central import database as db
 
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            alembic_cfg_path = os.path.join(current_dir, "alembic.ini")
+            pkg_dir = os.path.dirname(os.path.abspath(db.__file__))
+            alembic_cfg_path = None
+            alembic_script_location = None
 
-            if os.path.exists(alembic_cfg_path):
+            # Check if alembic.ini is in the package directory
+            pkg_alembic_cfg_path = os.path.join(pkg_dir, "alembic.ini")
+            if os.path.exists(pkg_alembic_cfg_path):
+                alembic_cfg_path = pkg_alembic_cfg_path
+                alembic_script_location = os.path.join(pkg_dir, "alembic")
+                logger.debug("Using package alembic.ini")
+            else:
+                # Check one level up (project root for development)
+                dev_alembic_cfg_path = os.path.join(os.path.dirname(pkg_dir), "alembic.ini")
+                if os.path.exists(dev_alembic_cfg_path):
+                    alembic_cfg_path = dev_alembic_cfg_path
+                    alembic_script_location = os.path.join(os.path.dirname(pkg_dir), "alembic")
+                    logger.debug("Using development alembic.ini")
+
+            if alembic_cfg_path and os.path.exists(alembic_cfg_path) and os.path.exists(alembic_script_location):
                 alembic_cfg = Config(alembic_cfg_path)
-                # Let alembic/env.py determine the database URL (it will use db_admin_url)
+
+                # Update script_location to absolute path
+                alembic_cfg.set_main_option("script_location", alembic_script_location)
+                logger.debug(f"Set alembic script_location to: {alembic_script_location}")
+
+                # Always stamp with the latest version since we created all tables with SQLAlchemy
                 command.stamp(alembic_cfg, "head")
                 logger.info("✅ Successfully stamped database with latest migration version")
             else:
