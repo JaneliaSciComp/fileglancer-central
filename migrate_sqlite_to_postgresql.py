@@ -70,6 +70,9 @@ def perform_migration(sqlite_url: str, postgresql_url: str, skip_existing: bool 
     if not verify_database_connection(postgresql_url, "PostgreSQL"):
         return False
 
+    sqlite_engine = None
+    postgresql_engine = None
+
     try:
         # Create database engines
         sqlite_engine = create_engine(sqlite_url)
@@ -292,6 +295,15 @@ def perform_migration(sqlite_url: str, postgresql_url: str, skip_existing: bool 
     except Exception as e:
         logger.error(f"❌ Migration failed: {e}")
         return False
+    finally:
+        # Properly dispose of database engines and close all connections
+        if sqlite_engine is not None:
+            logger.debug("Disposing SQLite engine connections...")
+            sqlite_engine.dispose()
+        if postgresql_engine is not None:
+            logger.debug("Disposing PostgreSQL engine connections...")
+            postgresql_engine.dispose()
+        logger.debug("Database connections cleaned up")
 
 
 def main():
