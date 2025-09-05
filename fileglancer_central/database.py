@@ -12,6 +12,9 @@ SHARING_KEY_LENGTH = 12
 # Global flag to track if migrations have been run
 _migrations_run = False
 
+# Engine cache - maintain multiple engines for different database URLs
+_engine_cache = {}
+
 Base = declarative_base()
 class FileSharePathDB(Base):
     """Database model for storing file share paths"""
@@ -35,7 +38,7 @@ class ExternalBucketDB(Base):
     external_url = Column(String)
     fsp_name = Column(String, nullable=False)
     relative_path = Column(String)
-    
+
 
 class LastRefreshDB(Base):
     """Database model for storing the last refresh time of tables"""
@@ -89,7 +92,7 @@ class TicketDB(Base):
     ticket_key = Column(String, nullable=False, unique=True)
     created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(UTC))
     updated_at = Column(DateTime, nullable=False, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
-    
+
     # TODO: Do we want to only allow one ticket per path?
     # Commented out now for testing purposes
     # __table_args__ = (
@@ -100,21 +103,21 @@ class TicketDB(Base):
 def run_alembic_upgrade(db_url):
     """Run Alembic migrations to upgrade database to latest version"""
     global _migrations_run
-    
+
     if _migrations_run:
         logger.debug("Migrations already run, skipping")
         return
-    
+
     try:
         from alembic.config import Config
         from alembic import command
         import os
-        
+
         alembic_cfg_path = None
-        
+
         # Try to find alembic.ini - first in package directory, then development setup
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        
+
         # Check if alembic.ini is in the package directory (installed package)
         pkg_alembic_cfg_path = os.path.join(current_dir, "alembic.ini")
         if os.path.exists(pkg_alembic_cfg_path):
@@ -127,27 +130,27 @@ def run_alembic_upgrade(db_url):
             if os.path.exists(dev_alembic_cfg_path):
                 alembic_cfg_path = dev_alembic_cfg_path
                 logger.debug("Using development alembic.ini")
-        
+
         if alembic_cfg_path and os.path.exists(alembic_cfg_path):
             alembic_cfg = Config(alembic_cfg_path)
             alembic_cfg.set_main_option("sqlalchemy.url", db_url)
-            
+
             # Update script_location for packaged installations
             if alembic_cfg_path == pkg_alembic_cfg_path:
                 # Using packaged alembic.ini, also update script_location
                 pkg_alembic_dir = os.path.join(current_dir, "alembic")
                 if os.path.exists(pkg_alembic_dir):
                     alembic_cfg.set_main_option("script_location", pkg_alembic_dir)
-            
+
             command.upgrade(alembic_cfg, "head")
             logger.info("Alembic migrations completed successfully")
         else:
             logger.warning("Alembic configuration not found, falling back to create_all")
-            engine = create_engine(db_url)
+            engine = _get_engine(db_url)
             Base.metadata.create_all(engine)
     except Exception as e:
         logger.warning(f"Alembic migration failed, falling back to create_all: {e}")
-        engine = create_engine(db_url)
+        engine = _get_engine(db_url)
         Base.metadata.create_all(engine)
     finally:
         _migrations_run = True
@@ -158,13 +161,48 @@ def initialize_database(db_url):
     run_alembic_upgrade(db_url)
 
 
+def _get_engine(db_url):
+    """Get or create a cached database engine for the given URL"""
+    global _engine_cache
+    
+    # Return cached engine if it exists
+    if db_url in _engine_cache:
+        return _engine_cache[db_url]
+    
+    # Create new engine and cache it
+    engine = create_engine(
+        db_url,
+        pool_size=10,
+        max_overflow=20,
+        pool_recycle=3600,  # Recycle connections after 1 hour
+        pool_pre_ping=True  # Verify connections before use
+    )
+    _engine_cache[db_url] = engine
+    
+    return engine
+
 def get_db_session(db_url):
-    """Create and return a database session"""
-    engine = create_engine(db_url)
+    """Create and return a database session using a cached engine"""
+    engine = _get_engine(db_url)
     Session = sessionmaker(bind=engine)
     session = Session()
-    
+
     return session
+
+
+def dispose_engine(db_url=None):
+    """Dispose of cached engine(s) and close connections"""
+    global _engine_cache
+    
+    if db_url is None:
+        # Dispose all engines
+        for engine in _engine_cache.values():
+            engine.dispose()
+        _engine_cache.clear()
+    elif db_url in _engine_cache:
+        # Dispose specific engine
+        _engine_cache[db_url].dispose()
+        del _engine_cache[db_url]
 
 
 def get_all_paths(session):
@@ -194,10 +232,10 @@ def update_file_share_paths(session, paths, table_last_updated, max_paths_to_del
     for path_dict in paths:
         mount_path = path_dict['mount_path']
         new_paths.add(mount_path)
-        
+
         # Check if path exists
         existing_record = session.query(FileSharePathDB).filter_by(mount_path=mount_path).first()
-        
+
         if existing_record:
             # Update existing record
             existing_record.name = path_dict['name']
@@ -248,7 +286,7 @@ def update_external_buckets(session, buckets, table_last_updated):
     """Update database with new external buckets"""
     # Get all file share paths to determine fsp_name and relative_path
     all_fsp = session.query(FileSharePathDB).all()
-    
+
     # Get all existing external buckets from database
     existing_buckets = {bucket[0] for bucket in session.query(ExternalBucketDB.full_path).all()}
     new_buckets = set()
@@ -260,25 +298,25 @@ def update_external_buckets(session, buckets, table_last_updated):
         full_path = bucket_dict['full_path']
         external_url = bucket_dict['external_url']
         new_buckets.add(full_path)
-        
+
         # Determine fsp_name and relative_path by finding matching FileSharePathDB
         fsp_name = None
         relative_path = None
-        
+
         for fsp in all_fsp:
             if full_path.startswith(fsp.mount_path):
                 fsp_name = fsp.name
                 # Remove the mount_path prefix and any leading slash
                 relative_path = full_path[len(fsp.mount_path):].lstrip('/')
                 break
-        
+
         if fsp_name is None:
             logger.warning(f"Could not find matching file share path for external bucket: {full_path}")
             continue  # Skip buckets without matching file share paths
-        
+
         # Check if bucket exists
         existing_record = session.query(ExternalBucketDB).filter_by(full_path=full_path).first()
-        
+
         if existing_record:
             # Update existing record
             existing_record.external_url = external_url
@@ -325,10 +363,10 @@ def set_user_preference(session: Session, username: str, key: str, value: Dict):
     """Set a user preference value
     If the preference already exists, it will be updated with the new value.
     If the preference does not exist, it will be created.
-    Returns the preference object.    
+    Returns the preference object.
     """
     pref = session.query(UserPreferenceDB).filter_by(
-        username=username, 
+        username=username,
         key=key
     ).first()
 
@@ -394,7 +432,7 @@ def _validate_proxied_path(session: Session, fsp_name: str, path: str) -> None:
     except PermissionError:
         raise ValueError(f"Path {path} is not accessible relative to {fsp_name}")
 
-        
+
 def create_proxied_path(session: Session, username: str, sharing_name: str, fsp_name: str, path: str) -> ProxiedPathDB:
     """Create a new proxied path"""
     _validate_proxied_path(session, fsp_name, path)
@@ -402,8 +440,8 @@ def create_proxied_path(session: Session, username: str, sharing_name: str, fsp_
     sharing_key = secrets.token_urlsafe(SHARING_KEY_LENGTH)
     now = datetime.now(UTC)
     session.add(ProxiedPathDB(
-        username=username, 
-        sharing_key=sharing_key, 
+        username=username,
+        sharing_key=sharing_key,
         sharing_name=sharing_name,
         fsp_name=fsp_name,
         path=path,
@@ -412,36 +450,36 @@ def create_proxied_path(session: Session, username: str, sharing_name: str, fsp_
     ))
     session.commit()
     return get_proxied_path_by_sharing_key(session, sharing_key)
-    
 
-def update_proxied_path(session: Session, 
+
+def update_proxied_path(session: Session,
                         username: str,
-                        sharing_key: str, 
-                        new_sharing_name: Optional[str] = None, 
+                        sharing_key: str,
+                        new_sharing_name: Optional[str] = None,
                         new_path: Optional[str] = None,
                         new_fsp_name: Optional[str] = None) -> ProxiedPathDB:
     """Update a proxied path"""
     proxied_path = get_proxied_path_by_sharing_key(session, sharing_key)
     if not proxied_path:
         raise ValueError(f"Proxied path with sharing key {sharing_key} not found")
-    
+
     if username != proxied_path.username:
         raise ValueError(f"Proxied path with sharing key {sharing_key} not found for user {username}")
 
     if new_sharing_name:
         proxied_path.sharing_name = new_sharing_name
-        
+
     if new_fsp_name:
         proxied_path.fsp_name = new_fsp_name
 
     if new_path:
         proxied_path.path = new_path
-        
+
     _validate_proxied_path(session, proxied_path.fsp_name, proxied_path.path)
-                               
+
     session.commit()
     return proxied_path
-    
+
 
 def delete_proxied_path(session: Session, username: str, sharing_key: str):
     """Delete a proxied path"""

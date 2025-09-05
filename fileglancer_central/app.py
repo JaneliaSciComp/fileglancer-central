@@ -143,11 +143,18 @@ def create_app(settings):
         logger.remove()
         logger.add(sys.stderr, level=settings.log_level)
 
-        logger.trace(f"Settings:")
-        logger.trace(f"  log_level: {settings.log_level}")
-        logger.trace(f"  db_url: {settings.db_url}")
-        logger.trace(f"  use_access_flags: {settings.use_access_flags}")
-        logger.trace(f"  atlassian_url: {settings.atlassian_url}")
+        def mask_password(url: str) -> str:
+            """Mask password in database URL for logging"""
+            import re
+            return re.sub(r'(://[^:]+:)[^@]+(@)', r'\1****\2', url)
+
+        logger.info(f"Settings:")
+        logger.info(f"  log_level: {settings.log_level}")
+        logger.info(f"  db_url: {mask_password(settings.db_url)}")
+        if settings.db_admin_url:
+            logger.info(f"  db_admin_url: {mask_password(settings.db_admin_url)}")
+        logger.info(f"  use_access_flags: {settings.use_access_flags}")
+        logger.info(f"  atlassian_url: {settings.atlassian_url}")
 
         # Initialize database (run migrations once at startup)
         logger.info("Initializing database...")
