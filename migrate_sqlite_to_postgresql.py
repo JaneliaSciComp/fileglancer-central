@@ -173,12 +173,20 @@ def perform_migration(sqlite_url: str, postgresql_url: str, skip_existing: bool 
 
                 # Build CREATE TABLE statement
                 col_definitions = []
+                pk_columns = primary_keys.get('constrained_columns', []) if primary_keys else []
+
                 for col in columns:
                     col_def = f'"{col["name"]}" '
 
-                    # Simple type mapping
+                    # Type mapping with special handling for auto-increment primary keys
                     sqlite_type = str(col['type']).upper()
-                    if 'INTEGER' in sqlite_type:
+                    is_pk = col['name'] in pk_columns
+                    is_autoincrement = col.get('autoincrement', False)
+
+                    if 'INTEGER' in sqlite_type and is_pk:
+                        # Primary key INTEGER columns should be SERIAL for auto-increment
+                        col_def += 'SERIAL'
+                    elif 'INTEGER' in sqlite_type:
                         col_def += 'INTEGER'
                     elif 'VARCHAR' in sqlite_type or 'TEXT' in sqlite_type or 'STRING' in sqlite_type:
                         col_def += 'TEXT'
@@ -194,10 +202,23 @@ def perform_migration(sqlite_url: str, postgresql_url: str, skip_existing: bool 
 
                     col_definitions.append(col_def)
 
-                # Add primary key
+                # Add primary key constraint (only if not already handled by SERIAL)
                 if primary_keys and primary_keys.get('constrained_columns'):
-                    pk_cols = ', '.join([f'"{col}"' for col in primary_keys['constrained_columns']])
-                    col_definitions.append(f'PRIMARY KEY ({pk_cols})')
+                    pk_cols = primary_keys['constrained_columns']
+                    # Only add explicit PRIMARY KEY constraint if we have multiple columns
+                    # or if the single PK column is not SERIAL (SERIAL implies PRIMARY KEY)
+                    if len(pk_cols) > 1:
+                        pk_col_list = ', '.join([f'"{col}"' for col in pk_cols])
+                        col_definitions.append(f'PRIMARY KEY ({pk_col_list})')
+                    elif len(pk_cols) == 1:
+                        # Check if the single PK column is SERIAL
+                        pk_col_name = pk_cols[0]
+                        pk_col_info = next((col for col in columns if col['name'] == pk_col_name), None)
+                        if pk_col_info:
+                            sqlite_type = str(pk_col_info['type']).upper()
+                            if not ('INTEGER' in sqlite_type):
+                                # Not INTEGER, so not SERIAL, need explicit PRIMARY KEY
+                                col_definitions.append(f'PRIMARY KEY ("{pk_col_name}")')
 
                 # Add unique constraints
                 for constraint in unique_constraints:
