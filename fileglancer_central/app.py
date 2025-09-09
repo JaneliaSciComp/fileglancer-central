@@ -429,6 +429,7 @@ def create_app(settings):
                 new_path = db.create_proxied_path(session, username, sharing_name, fsp_name, path)
                 return _convert_proxied_path(new_path, settings.external_proxy_url)
             except ValueError as e:
+                logger.error(f"Error creating proxied path: {e}")
                 raise HTTPException(status_code=400, detail=str(e))
 
 
@@ -467,6 +468,7 @@ def create_app(settings):
                 updated = db.update_proxied_path(session, username, sharing_key, new_path=path, new_sharing_name=sharing_name, new_fsp_name=fsp_name)
                 return _convert_proxied_path(updated, settings.external_proxy_url)
             except ValueError as e:
+                logger.error(f"Error updating proxied path: {e}")
                 raise HTTPException(status_code=400, detail=str(e))
 
 
