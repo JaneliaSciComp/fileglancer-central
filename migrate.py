@@ -420,16 +420,15 @@ def apply_alembic_migrations(alembic_cfg: Config, postgresql_url: str, logger: l
         # Run the migration (Alembic will interfere with logging)
         command.upgrade(alembic_cfg, "head")
 
-        # Alembic has messed up our logging - we'll fix it in the main function
-        print("✅ Alembic migrations applied successfully")  # Use print since logger is broken
+        sys.stderr.write("✅ Alembic migrations applied successfully\n")
         return True
 
     except Exception as e:
-        logger.error(f"❌ Failed to apply Alembic migrations: {e}")
-        logger.error("💡 Common issues:")
-        logger.error("   - Check that Alembic configuration file exists and is valid")
-        logger.error("   - Verify that migration files exist in the versions directory")
-        logger.error("   - Ensure PostgreSQL user has CREATE privileges")
+        sys.stderr.write(f"❌ Failed to apply Alembic migrations: {e}")
+        sys.stderr.write("💡 Common issues:")
+        sys.stderr.write("   - Check that Alembic configuration file exists and is valid")
+        sys.stderr.write("   - Verify that migration files exist in the versions directory")
+        sys.stderr.write("   - Ensure PostgreSQL user has CREATE privileges")
         return False
 
     finally:
