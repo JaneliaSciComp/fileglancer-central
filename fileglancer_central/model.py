@@ -91,21 +91,32 @@ class Ticket(BaseModel):
     updated: datetime = Field(
         description="The date and time the ticket was updated"
     )
-    status: str = Field(
-        description="The status of the ticket"
+    status: Optional[str] = Field(
+        description="The status of the ticket",
+        default=None
     )
-    resolution: str = Field(
-        description="The resolution of the ticket"
+    resolution: Optional[str] = Field(
+        description="The resolution of the ticket",
+        default=None
     )
-    description: str = Field(
-        description="The description of the ticket"
+    description: Optional[str] = Field(
+        description="The description of the ticket",
+        default=None
     )
-    link: HttpUrl = Field(
-        description="The link to the ticket"
+    link: Optional[HttpUrl] = Field(
+        description="The link to the ticket",
+        default=None
     )
     comments: List[TicketComment] = Field(
-        description="The comments on the ticket"
+        description="The comments on the ticket",
+        default=[]
     )
+    def populate_details(self, ticket_details: dict):
+        self.status = ticket_details['status']
+        self.resolution = ticket_details['resolution']
+        self.description = ticket_details['description']
+        self.link = ticket_details['link']
+        self.comments = ticket_details['comments']
     
 
 class UserPreference(BaseModel):
@@ -123,7 +134,6 @@ class ProxiedPath(BaseModel):
     username: str = Field(
         description="The username of the user who owns this proxied path"
     )
-    # TODO: does this need to be exposed in the API? It's already included in the URL.
     sharing_key: str = Field(
         description="The sharing key is part of the URL proxy path. It is used to uniquely identify the proxied path."
     )
