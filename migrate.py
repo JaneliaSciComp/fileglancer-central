@@ -57,6 +57,13 @@ def setup_logging(verbose: bool = False) -> logging.Logger:
         force=True  # Force reconfigure if already configured
     )
 
+    # Disable SQLAlchemy logging unless in verbose mode
+    if not verbose:
+        logging.getLogger('sqlalchemy.engine').setLevel(logging.WARNING)
+        logging.getLogger('sqlalchemy.dialects').setLevel(logging.WARNING)
+        logging.getLogger('sqlalchemy.pool').setLevel(logging.WARNING)
+        logging.getLogger('sqlalchemy.orm').setLevel(logging.WARNING)
+
     # Force unbuffered output
     import sys
     sys.stdout.reconfigure(line_buffering=True)
@@ -163,7 +170,7 @@ Optional flags:
 def validate_sqlite_connection(sqlite_url: str, logger: logging.Logger) -> bool:
     """Validate SQLite database connection."""
     try:
-        engine = create_engine(sqlite_url)
+        engine = create_engine(sqlite_url, echo=False)
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
         logger.info("✅ SQLite connection validated successfully")
@@ -176,7 +183,7 @@ def validate_sqlite_connection(sqlite_url: str, logger: logging.Logger) -> bool:
 def validate_postgresql_connection(postgresql_url: str, logger: logging.Logger) -> bool:
     """Validate PostgreSQL database connection."""
     try:
-        engine = create_engine(postgresql_url)
+        engine = create_engine(postgresql_url, echo=False)
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
         logger.info("✅ PostgreSQL connection validated successfully")
@@ -267,7 +274,7 @@ def setup_alembic_config(postgresql_url: str, logger: logging.Logger,
 def check_existing_postgresql_schema(postgresql_url: str, logger: logging.Logger, auto_yes: bool = False) -> bool:
     """Check if PostgreSQL database has existing Alembic migrations."""
     try:
-        engine = create_engine(postgresql_url)
+        engine = create_engine(postgresql_url, echo=False)
         inspector = inspect(engine)
         tables = inspector.get_table_names()
 
@@ -296,7 +303,7 @@ def clear_postgresql_database(postgresql_url: str, logger: logging.Logger) -> bo
     try:
         logger.info("🧹 Clearing PostgreSQL database...")
 
-        engine = create_engine(postgresql_url)
+        engine = create_engine(postgresql_url, echo=False)
 
         with engine.connect() as conn:
             trans = conn.begin()
@@ -364,7 +371,7 @@ def clear_postgresql_database(postgresql_url: str, logger: logging.Logger) -> bo
 def verify_schema_creation(postgresql_url: str, logger: logging.Logger) -> bool:
     """Verify that Alembic migrations created the expected schema."""
     try:
-        engine = create_engine(postgresql_url)
+        engine = create_engine(postgresql_url, echo=False)
         inspector = inspect(engine)
         tables = inspector.get_table_names()
 
@@ -415,10 +422,11 @@ def apply_alembic_migrations(alembic_cfg: Config, postgresql_url: str, logger: l
         logger.info("🔄 Running Alembic upgrade to head...")
         logger.info(f"🔧 Set FILEGLANCER_MIGRATION_DB_URL to: {postgresql_url.split('@')[0]}@***")
 
-        # Run the migration
+        # Run the migration (Alembic will interfere with logging)
         command.upgrade(alembic_cfg, "head")
 
-        logger.info("✅ Alembic migrations applied successfully")
+        # Alembic has messed up our logging - we'll fix it in the main function
+        print("✅ Alembic migrations applied successfully")  # Use print since logger is broken
         return True
 
     except Exception as e:
@@ -467,13 +475,15 @@ def disable_postgresql_constraints(postgresql_engine, logger: logging.Logger):
     """Temporarily disable PostgreSQL constraints for faster inserts."""
     try:
         with postgresql_engine.connect() as conn:
-            # Disable foreign key checks temporarily
+            # Disable foreign key checks temporarily (requires SUPERUSER privileges)
             conn.execute(text("SET session_replication_role = replica;"))
             conn.commit()
         logger.info("🔧 PostgreSQL constraints temporarily disabled")
 
     except Exception as e:
-        logger.warning(f"⚠️  Could not disable constraints: {e}")
+        # This is expected if user doesn't have SUPERUSER privileges
+        logger.info(f"💡 Constraint optimization not available (requires SUPERUSER): {type(e).__name__}")
+        logger.info("🔧 Migration will proceed without constraint optimization")
 
 
 def enable_postgresql_constraints(postgresql_engine, logger: logging.Logger):
@@ -486,7 +496,8 @@ def enable_postgresql_constraints(postgresql_engine, logger: logging.Logger):
         logger.info("🔧 PostgreSQL constraints re-enabled")
 
     except Exception as e:
-        logger.warning(f"⚠️  Could not re-enable constraints: {e}")
+        # This is expected if user doesn't have SUPERUSER privileges or constraints weren't disabled
+        logger.debug(f"Constraint re-enable not needed or not available: {type(e).__name__}")
 
 
 def migrate_table_data(sqlite_engine, postgresql_engine, table_name: str, batch_size: int, logger: logging.Logger) -> int:
@@ -595,9 +606,9 @@ def migrate_table_data(sqlite_engine, postgresql_engine, table_name: str, batch_
 def perform_data_migration(sqlite_url: str, postgresql_url: str, batch_size: int, logger: logging.Logger) -> bool:
     """Perform the complete data migration process."""
     try:
-        # Create database engines
-        sqlite_engine = create_engine(sqlite_url)
-        postgresql_engine = create_engine(postgresql_url)
+        # Create database engines with quiet logging
+        sqlite_engine = create_engine(sqlite_url, echo=False)
+        postgresql_engine = create_engine(postgresql_url, echo=False)
 
         # Get tables in dependency order
         tables_to_migrate = get_table_dependencies(sqlite_engine, logger)
@@ -672,35 +683,71 @@ def update_postgresql_sequences(postgresql_engine, logger: logging.Logger) -> bo
     try:
         logger.info("🔄 Updating PostgreSQL sequence values...")
 
-        with postgresql_engine.connect() as conn:
-            # Get all sequences (handle different PostgreSQL versions)
-            try:
-                # Try modern PostgreSQL (10+)
+        # Get all sequences (handle different PostgreSQL versions)
+        sequences = []
+
+        # Try modern PostgreSQL (10+) first
+        try:
+            with postgresql_engine.connect() as conn:
                 sequences_query = text("""
                     SELECT schemaname, tablename, columnname, sequencename
                     FROM pg_sequences
                     WHERE schemaname = 'public'
                 """)
                 sequences = conn.execute(sequences_query).fetchall()
-            except Exception:
-                # Fallback for older PostgreSQL versions
-                sequences_query = text("""
-                    SELECT 'public' as schemaname,
-                           substr(c.relname, 1, length(c.relname) - 3) as tablename,
-                           'id' as columnname,
-                           c.relname as sequencename
-                    FROM pg_class c
-                    WHERE c.relkind = 'S'
-                    AND c.relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'public')
-                """)
-                sequences = conn.execute(sequences_query).fetchall()
+                logger.debug("Using pg_sequences for PostgreSQL 10+")
+        except Exception as e:
+            logger.debug(f"pg_sequences query failed: {e}, trying fallback")
 
-            for seq in sequences:
-                table_name = seq.tablename
-                column_name = seq.columnname
-                sequence_name = seq.sequencename
+            # Fallback for older PostgreSQL versions - use a new connection
+            try:
+                with postgresql_engine.connect() as conn:
+                    sequences_query = text("""
+                        SELECT 'public' as schemaname,
+                               CASE
+                                   WHEN c.relname LIKE '%_id_seq' THEN substr(c.relname, 1, length(c.relname) - 7)
+                                   WHEN c.relname LIKE '%_seq' THEN substr(c.relname, 1, length(c.relname) - 4)
+                                   ELSE substr(c.relname, 1, length(c.relname) - 3)
+                               END as tablename,
+                               'id' as columnname,
+                               c.relname as sequencename
+                        FROM pg_class c
+                        WHERE c.relkind = 'S'
+                        AND c.relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'public')
+                    """)
+                    sequences = conn.execute(sequences_query).fetchall()
+                    logger.debug("Using pg_class fallback for older PostgreSQL")
+            except Exception as fallback_e:
+                logger.error(f"Both sequence queries failed: {fallback_e}")
+                return False
 
-                try:
+        if not sequences:
+            logger.info("📋 No sequences found to update")
+            return True
+
+        # Get list of existing tables to avoid updating sequences for non-existent tables
+        existing_tables = set()
+        try:
+            with postgresql_engine.connect() as conn:
+                inspector = inspect(postgresql_engine)
+                existing_tables = set(inspector.get_table_names())
+        except Exception as e:
+            logger.warning(f"Could not get table list: {e}")
+
+        # Update each sequence with individual transactions to avoid aborted transaction issues
+        for seq in sequences:
+            table_name = seq.tablename
+            column_name = seq.columnname
+            sequence_name = seq.sequencename
+
+            # Skip sequences for tables that don't exist
+            if table_name not in existing_tables:
+                logger.debug(f"  ⏭️  Skipping sequence {sequence_name} - table {table_name} does not exist")
+                continue
+
+            try:
+                # Use a fresh connection for each sequence to avoid transaction state issues
+                with postgresql_engine.connect() as conn:
                     # Get the maximum value from the table
                     max_query = text(f"SELECT COALESCE(MAX({column_name}), 0) FROM {table_name}")
                     max_val = conn.execute(max_query).scalar()
@@ -709,12 +756,15 @@ def update_postgresql_sequences(postgresql_engine, logger: logging.Logger) -> bo
                         # Set sequence to max_val + 1
                         set_seq_query = text(f"SELECT setval('{sequence_name}', {max_val + 1})")
                         conn.execute(set_seq_query)
+                        conn.commit()
                         logger.info(f"  📈 Updated sequence {sequence_name} to {max_val + 1}")
+                    else:
+                        logger.debug(f"  📋 Sequence {sequence_name} already at correct value (table empty)")
 
-                except Exception as e:
-                    logger.warning(f"  ⚠️  Could not update sequence {sequence_name}: {e}")
-
-            conn.commit()
+            except Exception as e:
+                logger.warning(f"  ⚠️  Could not update sequence {sequence_name}: {e}")
+                logger.debug(f"     Table: {table_name}, Column: {column_name}")
+                # Continue with other sequences even if one fails
 
         logger.info("✅ PostgreSQL sequences updated")
         return True
@@ -729,8 +779,8 @@ def validate_data_integrity(sqlite_url: str, postgresql_url: str, logger: loggin
     try:
         logger.info("🔍 Validating data integrity...")
 
-        sqlite_engine = create_engine(sqlite_url)
-        postgresql_engine = create_engine(postgresql_url)
+        sqlite_engine = create_engine(sqlite_url, echo=False)
+        postgresql_engine = create_engine(postgresql_url, echo=False)
 
         # Get common tables
         sqlite_inspector = inspect(sqlite_engine)
@@ -803,8 +853,8 @@ def generate_migration_report(sqlite_url: str, postgresql_url: str, logger: logg
     try:
         logger.info("📋 Generating migration report...")
 
-        sqlite_engine = create_engine(sqlite_url)
-        postgresql_engine = create_engine(postgresql_url)
+        sqlite_engine = create_engine(sqlite_url, echo=False)
+        postgresql_engine = create_engine(postgresql_url, echo=False)
 
         print("\n" + "=" * 80)
         print("📊 MIGRATION REPORT")
@@ -869,7 +919,7 @@ def post_migration_tasks(sqlite_url: str, postgresql_url: str, logger: logging.L
         success = True
 
         # Update PostgreSQL sequences (treat failure as warning, not error)
-        postgresql_engine = create_engine(postgresql_url)
+        postgresql_engine = create_engine(postgresql_url, echo=False)
         if not update_postgresql_sequences(postgresql_engine, logger):
             logger.warning("⚠️  Sequence update failed, but this doesn't affect data integrity")
 
@@ -933,45 +983,45 @@ def main():
     if not apply_alembic_migrations(alembic_cfg, args.postgresql_url, logger):
         sys.exit(1)
 
+    # Completely reinitialize logging system after Alembic interference
+    import importlib
+    importlib.reload(logging)
+
+    # Clear all existing loggers and handlers
+    for handler in logging.root.handlers[:]:
+        logging.root.removeHandler(handler)
+    logging.root.handlers.clear()
+
+    # Reset all loggers
+    for name in list(logging.Logger.manager.loggerDict.keys()):
+        logging.Logger.manager.loggerDict[name].handlers.clear()
+
+    # Create completely fresh logger
+    logger = setup_logging(args.verbose)
+    logger.info("🔧 Logger restored after Alembic interference")
+
     # Step 5.1: Verify schema was created
-    from datetime import datetime
-    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    sys.stdout.write(f"{timestamp} - INFO - 🔍 Verifying schema creation...\n")
-    sys.stdout.flush()
+    logger.info("🔍 Verifying schema creation...")
     if not verify_schema_creation(args.postgresql_url, logger):
-        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        sys.stdout.write(f"{timestamp} - ERROR - ❌ Schema verification failed - no tables found after Alembic migration\n")
-        sys.stdout.flush()
+        logger.error("❌ Schema verification failed - no tables found after Alembic migration")
         sys.exit(1)
 
     # Step 6: Perform data migration
-    # Use direct stdout for key messages since Alembic interferes with logger
-    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    sys.stdout.write(f"{timestamp} - INFO - 🚀 Starting data migration...\n")
-    sys.stdout.flush()
-
+    logger.info("🚀 Starting data migration...")
     migration_result = perform_data_migration(args.sqlite_url, args.postgresql_url, args.batch_size, logger)
 
     if not migration_result:
-        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        sys.stdout.write(f"{timestamp} - ERROR - ❌ Data migration failed\n")
-        sys.stdout.flush()
+        logger.error("❌ Data migration failed")
         sys.exit(1)
 
-    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    sys.stdout.write(f"{timestamp} - INFO - ✅ Data migration completed successfully\n")
-    sys.stdout.flush()
+    logger.info("✅ Data migration completed successfully")
 
     # Step 7: Post-migration tasks
-    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    sys.stdout.write(f"{timestamp} - INFO - 🔍 Running post-migration validation...\n")
-    sys.stdout.flush()
+    logger.info("🔍 Running post-migration validation...")
     if not post_migration_tasks(args.sqlite_url, args.postgresql_url, logger):
         sys.exit(1)
 
-    # print the final success message directly to stdout
-    sys.stdout.write(f"{timestamp} - INFO - 🎉 Migration completed successfully!\n")
-    sys.stdout.flush()
+    logger.info("🎉 Migration completed successfully!")
 
 
 if __name__ == "__main__":
