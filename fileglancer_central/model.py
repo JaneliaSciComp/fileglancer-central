@@ -85,10 +85,10 @@ class Ticket(BaseModel):
     key: str = Field(
         description="The key of the ticket"
     )
-    created: datetime = Field(
-        description="The date and time the ticket was created"
+    created: Optional[datetime] = Field(
+        description="The date and time the ticket was created",
     )
-    updated: datetime = Field(
+    updated: Optional[datetime] = Field(
         description="The date and time the ticket was updated"
     )
     status: Optional[str] = Field(
@@ -112,11 +112,13 @@ class Ticket(BaseModel):
         default=[]
     )
     def populate_details(self, ticket_details: dict):
-        self.status = ticket_details['status']
-        self.resolution = ticket_details['resolution']
-        self.description = ticket_details['description']
-        self.link = ticket_details['link']
-        self.comments = ticket_details['comments']
+        self.status = ticket_details.get('status')
+        self.resolution = ticket_details.get('resolution')
+        self.description = ticket_details.get('description')
+        self.link = ticket_details.get('link')
+        self.comments = ticket_details.get('comments', [])
+        self.created = ticket_details.get('created')
+        self.updated = ticket_details.get('updated')
     
 
 class UserPreference(BaseModel):

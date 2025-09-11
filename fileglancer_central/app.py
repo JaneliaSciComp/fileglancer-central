@@ -291,7 +291,7 @@ def create_app(settings):
             logger.warning("Notifications file not found")
             return NotificationResponse(notifications=[])
         except Exception as e:
-            logger.error(f"Error loading notifications: {e}")
+            logger.exception(f"Error loading notifications: {e}")
             return NotificationResponse(notifications=[])
 
 
@@ -308,37 +308,38 @@ def create_app(settings):
     ) -> str:
         try:
             # Create ticket in JIRA
-            jiraTicket = create_jira_ticket(
+            jira_ticket = create_jira_ticket(
                 project_key=project_key,
                 issue_type=issue_type,
                 summary=summary,
                 description=description
             )
-            if not jiraTicket or 'key' not in jiraTicket:
+            logger.info(f"Created JIRA ticket: {jira_ticket}")
+            if not jira_ticket or 'key' not in jira_ticket:
                 raise HTTPException(status_code=500, detail="Failed to create JIRA ticket")
 
             # Save reference to the ticket in the database
             with db.get_db_session(settings.db_url) as session:
-                dbTicket = db.create_ticket(
+                db_ticket = db.create_ticket(
                     session=session,
                     username=username,
                     fsp_name=fsp_name,
                     path=path,
-                    ticket_key=jiraTicket['key']
+                    ticket_key=jira_ticket['key']
                 )
-                if dbTicket is None:
+                if db_ticket is None:
                     raise HTTPException(status_code=500, detail="Failed to create ticket entry in database")
 
-            # Get the full ticket details from JIRA 
-            ticket_details = get_jira_ticket_details(jiraTicket['key'])
+                # Get the full ticket details from JIRA 
+                ticket_details = get_jira_ticket_details(jira_ticket['key'])
 
-            # Return DTO with details from both JIRA and database
-            ticket = _convert_ticket(dbTicket)
-            ticket.populate_details(ticket_details)
-            return ticket
+                # Return DTO with details from both JIRA and database
+                ticket = _convert_ticket(db_ticket)
+                ticket.populate_details(ticket_details)
+                return ticket
 
         except Exception as e:
-            logger.error(f"Error creating ticket: {e}")
+            logger.exception(f"Error creating ticket: {e}")
             raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -363,6 +364,8 @@ def create_app(settings):
                     ticket.populate_details(ticket_details)
                 except Exception as e:
                     logger.warning(f"Could not retrieve details for ticket {db_ticket.ticket_key}: {e}")
+                    ticket.description = f"Ticket {db_ticket.ticket_key} is no longer available in JIRA"
+                    ticket.status = "Deleted"
                 
             return tickets
 
@@ -379,6 +382,7 @@ def create_app(settings):
             if str(e) == "Issue Does Not Exist":
                 raise HTTPException(status_code=404, detail=str(e))
             else:
+                logger.exception(f"Error deleting ticket: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
 
 
