@@ -33,9 +33,18 @@ target_metadata = Base.metadata
 
 
 def get_database_url():
-    """Get database URL from application settings"""
+    """Get database URL from application settings or environment variable"""
+    # Check if we have a migration override URL
+    migration_url = os.environ.get("FILEGLANCER_MIGRATION_DB_URL")
+    if migration_url:
+        print(f"Using migration database URL from environment: {migration_url}")
+        return migration_url
+    
     try:
         settings = get_settings()
+        # Use admin URL for migrations if available, otherwise use regular URL
+        if hasattr(settings, 'db_admin_url') and settings.db_admin_url:
+            return settings.db_admin_url
         return settings.db_url
     except Exception as e:
         fallback_url = "sqlite:///./database.db"

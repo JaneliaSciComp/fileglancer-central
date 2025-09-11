@@ -28,8 +28,9 @@ dependencies = [
     "pydantic-settings[yaml]",
     "loguru >=0.7.2",
     "atlassian-python-api >=3.41",
-    "lxml >=5.3.1", 
-    "x2s3 >=0.9.1"
+    "lxml >=5.3.1",
+    "x2s3 >=0.9.1",
+    "psycopg2-binary >=2.9.9,<3"
 ]
 
 [project.optional-dependencies]
@@ -86,4 +87,3 @@ release = {features = ["release"], solve-group = "default"}
 python = "3.12.*"
 pip = ">=25.0.1,<26"
 ipykernel = "*"
-psycopg2-binary = ">=2.9.9,<3"

@@ -19,6 +19,7 @@ class Settings(BaseSettings):
 
     log_level: str = 'DEBUG'
     db_url: str = 'sqlite:///fileglancer.db'
+    db_admin_url: Optional[str] = None
 
     # If true, use seteuid/setegid for file access
     use_access_flags: bool = False
