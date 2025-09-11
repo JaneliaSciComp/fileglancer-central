@@ -100,7 +100,15 @@ def _convert_proxied_path(db_path: db.ProxiedPathDB, external_proxy_url: Optiona
         url=url
     )
 
-
+def _convert_ticket(db_ticket: db.TicketDB) -> Ticket:
+    return Ticket(
+        username=db_ticket.username,
+        fsp_name=db_ticket.fsp_name,
+        path=db_ticket.path,
+        key=db_ticket.ticket_key,
+        created=db_ticket.created_at,
+        updated=db_ticket.updated_at
+    )
 
 def create_app(settings):
 
@@ -283,7 +291,7 @@ def create_app(settings):
             logger.warning("Notifications file not found")
             return NotificationResponse(notifications=[])
         except Exception as e:
-            logger.error(f"Error loading notifications: {e}")
+            logger.exception(f"Error loading notifications: {e}")
             return NotificationResponse(notifications=[])
 
 
@@ -299,47 +307,39 @@ def create_app(settings):
         description: str
     ) -> str:
         try:
-            # Make ticket on JIRA
-            jiraTicket = create_jira_ticket(
+            # Create ticket in JIRA
+            jira_ticket = create_jira_ticket(
                 project_key=project_key,
                 issue_type=issue_type,
                 summary=summary,
                 description=description
             )
-            if not jiraTicket or 'key' not in jiraTicket:
+            logger.info(f"Created JIRA ticket: {jira_ticket}")
+            if not jira_ticket or 'key' not in jira_ticket:
                 raise HTTPException(status_code=500, detail="Failed to create JIRA ticket")
 
-            # Save the ticket in the database
+            # Save reference to the ticket in the database
             with db.get_db_session(settings.db_url) as session:
-                dbTicket = db.create_ticket_entry(
+                db_ticket = db.create_ticket(
                     session=session,
                     username=username,
                     fsp_name=fsp_name,
                     path=path,
-                    ticket_key=jiraTicket['key']
+                    ticket_key=jira_ticket['key']
                 )
-                if dbTicket is None:
+                if db_ticket is None:
                     raise HTTPException(status_code=500, detail="Failed to create ticket entry in database")
 
-            # Get the full ticket details using the key
-            ticket_details = get_jira_ticket_details(jiraTicket['key'])
+                # Get the full ticket details from JIRA 
+                ticket_details = get_jira_ticket_details(jira_ticket['key'])
 
-            return Ticket(
-                username=username,
-                fsp_name=fsp_name,
-                path=path,
-                key=ticket_details['key'],
-                created=ticket_details['created'],
-                updated=ticket_details['updated'],
-                status=ticket_details['status'],
-                resolution=ticket_details['resolution'],
-                description=ticket_details['description'],
-                link=ticket_details['link'],
-                comments=ticket_details['comments']
-            )
+                # Return DTO with details from both JIRA and database
+                ticket = _convert_ticket(db_ticket)
+                ticket.populate_details(ticket_details)
+                return ticket
 
         except Exception as e:
-            logger.error(f"Error creating ticket: {e}")
+            logger.exception(f"Error creating ticket: {e}")
             raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -348,23 +348,25 @@ def create_app(settings):
     async def get_tickets(username: str = Path(..., description="The username of the user who created the tickets"),
                           fsp_name: Optional[str] = Query(None, description="The name of the file share path that the ticket is associated with"),
                           path: Optional[str] = Query(None, description="The path that the ticket is associated with")):
+        
         with db.get_db_session(settings.db_url) as session:
-            tickets = db.get_tickets(session, username, fsp_name, path)
-            if not tickets:
+            
+            db_tickets = db.get_tickets(session, username, fsp_name, path)
+            if not db_tickets:
                 raise HTTPException(status_code=404, detail="No tickets found for this user")
-            for ticket in tickets:
+
+            tickets = []
+            for db_ticket in db_tickets:
+                ticket = _convert_ticket(db_ticket)
+                tickets.append(ticket)
                 try:
-                    ticket_details = get_jira_ticket_details(ticket.ticket_key)
-                    ticket.key = ticket_details['key']
-                    ticket.created = ticket_details['created']
-                    ticket.updated = ticket_details['updated']
-                    ticket.status = ticket_details['status']
-                    ticket.resolution = ticket_details['resolution']
-                    ticket.description = ticket_details['description']
-                    ticket.link = ticket_details['link']
-                    ticket.comments = ticket_details['comments']
+                    ticket_details = get_jira_ticket_details(db_ticket.ticket_key)
+                    ticket.populate_details(ticket_details)
                 except Exception as e:
-                    logger.error(f"Error retrieving details for ticket {ticket.ticket_key}: {e}")
+                    logger.warning(f"Could not retrieve details for ticket {db_ticket.ticket_key}: {e}")
+                    ticket.description = f"Ticket {db_ticket.ticket_key} is no longer available in JIRA"
+                    ticket.status = "Deleted"
+                
             return tickets
 
 
@@ -373,11 +375,14 @@ def create_app(settings):
     async def delete_ticket(ticket_key: str):
         try:
             delete_jira_ticket(ticket_key)
+            with db.get_db_session(settings.db_url) as session:
+                db.delete_ticket(session, ticket_key)
             return {"message": f"Ticket {ticket_key} deleted"}
         except Exception as e:
             if str(e) == "Issue Does Not Exist":
                 raise HTTPException(status_code=404, detail=str(e))
             else:
+                logger.exception(f"Error deleting ticket: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
 
 
