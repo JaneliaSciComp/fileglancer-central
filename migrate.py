@@ -12,6 +12,7 @@ import os
 import sqlite3
 import sys
 import logging
+import importlib
 from datetime import datetime, UTC
 from typing import Optional, Dict, List, Any
 
@@ -167,11 +168,10 @@ Optional flags:
     return parser.parse_args()
 
 
-def validate_sqlite_connection(sqlite_url: str, logger: logging.Logger) -> bool:
+def validate_sqlite_connection(sqlite_engine, logger: logging.Logger) -> bool:
     """Validate SQLite database connection."""
     try:
-        engine = create_engine(sqlite_url, echo=False)
-        with engine.connect() as conn:
+        with sqlite_engine.connect() as conn:
             conn.execute(text("SELECT 1"))
         logger.info("✅ SQLite connection validated successfully")
         return True
@@ -180,11 +180,10 @@ def validate_sqlite_connection(sqlite_url: str, logger: logging.Logger) -> bool:
         return False
 
 
-def validate_postgresql_connection(postgresql_url: str, logger: logging.Logger) -> bool:
+def validate_postgresql_connection(postgresql_engine, logger: logging.Logger) -> bool:
     """Validate PostgreSQL database connection."""
     try:
-        engine = create_engine(postgresql_url, echo=False)
-        with engine.connect() as conn:
+        with postgresql_engine.connect() as conn:
             conn.execute(text("SELECT 1"))
         logger.info("✅ PostgreSQL connection validated successfully")
         return True
@@ -271,15 +270,14 @@ def setup_alembic_config(postgresql_url: str, logger: logging.Logger,
         return None
 
 
-def check_existing_postgresql_schema(postgresql_url: str, logger: logging.Logger, auto_yes: bool = False) -> bool:
+def check_existing_postgresql_schema(postgresql_engine, logger: logging.Logger, auto_yes: bool = False) -> bool:
     """Check if PostgreSQL database has existing Alembic migrations."""
     try:
-        engine = create_engine(postgresql_url, echo=False)
-        inspector = inspect(engine)
+        inspector = inspect(postgresql_engine)
         tables = inspector.get_table_names()
 
         if 'alembic_version' in tables:
-            with engine.connect() as conn:
+            with postgresql_engine.connect() as conn:
                 result = conn.execute(text("SELECT version_num FROM alembic_version"))
                 version = result.scalar()
                 if version:
@@ -298,19 +296,17 @@ def check_existing_postgresql_schema(postgresql_url: str, logger: logging.Logger
         return False
 
 
-def clear_postgresql_database(postgresql_url: str, logger: logging.Logger) -> bool:
+def clear_postgresql_database(postgresql_engine, logger: logging.Logger) -> bool:
     """Clear all existing data and schema from PostgreSQL database."""
     try:
         logger.info("🧹 Clearing PostgreSQL database...")
 
-        engine = create_engine(postgresql_url, echo=False)
-
-        with engine.connect() as conn:
+        with postgresql_engine.connect() as conn:
             trans = conn.begin()
 
             try:
                 # Get all table names first
-                inspector = inspect(engine)
+                inspector = inspect(postgresql_engine)
                 table_names = inspector.get_table_names()
 
                 if table_names:
@@ -368,11 +364,10 @@ def clear_postgresql_database(postgresql_url: str, logger: logging.Logger) -> bo
         return False
 
 
-def verify_schema_creation(postgresql_url: str, logger: logging.Logger) -> bool:
+def verify_schema_creation(postgresql_engine, logger: logging.Logger) -> bool:
     """Verify that Alembic migrations created the expected schema."""
     try:
-        engine = create_engine(postgresql_url, echo=False)
-        inspector = inspect(engine)
+        inspector = inspect(postgresql_engine)
         tables = inspector.get_table_names()
 
         # Filter out system tables
@@ -395,7 +390,7 @@ def verify_schema_creation(postgresql_url: str, logger: logging.Logger) -> bool:
         if 'alembic_version' not in tables:
             logger.warning("⚠️  alembic_version table not found - migrations may not have completed")
         else:
-            with engine.connect() as conn:
+            with postgresql_engine.connect() as conn:
                 result = conn.execute(text("SELECT version_num FROM alembic_version"))
                 version = result.scalar()
                 logger.info(f"📌 Alembic version: {version}")
@@ -603,12 +598,9 @@ def migrate_table_data(sqlite_engine, postgresql_engine, table_name: str, batch_
         raise
 
 
-def perform_data_migration(sqlite_url: str, postgresql_url: str, batch_size: int, logger: logging.Logger) -> bool:
+def perform_data_migration(sqlite_engine, postgresql_engine, batch_size: int, logger: logging.Logger) -> bool:
     """Perform the complete data migration process."""
     try:
-        # Create database engines with quiet logging
-        sqlite_engine = create_engine(sqlite_url, echo=False)
-        postgresql_engine = create_engine(postgresql_url, echo=False)
 
         # Get tables in dependency order
         tables_to_migrate = get_table_dependencies(sqlite_engine, logger)
@@ -774,13 +766,10 @@ def update_postgresql_sequences(postgresql_engine, logger: logging.Logger) -> bo
         return False
 
 
-def validate_data_integrity(sqlite_url: str, postgresql_url: str, logger: logging.Logger) -> bool:
+def validate_data_integrity(sqlite_engine, postgresql_engine, logger: logging.Logger) -> bool:
     """Validate data integrity by comparing row counts and sample data."""
     try:
         logger.info("🔍 Validating data integrity...")
-
-        sqlite_engine = create_engine(sqlite_url, echo=False)
-        postgresql_engine = create_engine(postgresql_url, echo=False)
 
         # Get common tables
         sqlite_inspector = inspect(sqlite_engine)
@@ -848,20 +837,17 @@ def validate_data_integrity(sqlite_url: str, postgresql_url: str, logger: loggin
         return False
 
 
-def generate_migration_report(sqlite_url: str, postgresql_url: str, logger: logging.Logger):
+def generate_migration_report(sqlite_engine, postgresql_engine, logger: logging.Logger):
     """Generate a comprehensive migration summary report."""
     try:
         logger.info("📋 Generating migration report...")
-
-        sqlite_engine = create_engine(sqlite_url, echo=False)
-        postgresql_engine = create_engine(postgresql_url, echo=False)
 
         print("\n" + "=" * 80)
         print("📊 MIGRATION REPORT")
         print("=" * 80)
         print(f"Migration completed at: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S UTC')}")
-        print(f"SQLite source: {sqlite_url}")
-        print(f"PostgreSQL target: {postgresql_url.split('@')[0]}@***")
+        print(f"SQLite source: {sqlite_engine.url}")
+        print(f"PostgreSQL target: {str(postgresql_engine.url).split('@')[0]}@***")
         print()
 
         # Table summary
@@ -913,22 +899,21 @@ def generate_migration_report(sqlite_url: str, postgresql_url: str, logger: logg
         logger.error(f"❌ Failed to generate migration report: {e}")
 
 
-def post_migration_tasks(sqlite_url: str, postgresql_url: str, logger: logging.Logger) -> bool:
+def post_migration_tasks(sqlite_engine, postgresql_engine, logger: logging.Logger) -> bool:
     """Perform post-migration tasks including validation and reporting."""
     try:
         success = True
 
         # Update PostgreSQL sequences (treat failure as warning, not error)
-        postgresql_engine = create_engine(postgresql_url, echo=False)
         if not update_postgresql_sequences(postgresql_engine, logger):
             logger.warning("⚠️  Sequence update failed, but this doesn't affect data integrity")
 
         # Validate data integrity (this is critical)
-        if not validate_data_integrity(sqlite_url, postgresql_url, logger):
+        if not validate_data_integrity(sqlite_engine, postgresql_engine, logger):
             success = False
 
         # Generate migration report
-        generate_migration_report(sqlite_url, postgresql_url, logger)
+        generate_migration_report(sqlite_engine, postgresql_engine, logger)
         sys.stdout.flush()  # Ensure report is displayed immediately
 
         return success
@@ -948,15 +933,24 @@ def main():
     logger.info(f"PostgreSQL URL: {args.postgresql_url.split('@')[0]}@***")  # Hide credentials
     logger.info(f"Batch size: {args.batch_size}")
 
-    # Step 1: Validate database connections
+    # Step 1: Create database engines
+    logger.info("🔗 Creating database connections...")
+    try:
+        sqlite_engine = create_engine(args.sqlite_url, echo=False)
+        postgresql_engine = create_engine(args.postgresql_url, echo=False)
+    except Exception as e:
+        logger.error(f"❌ Failed to create database engines: {e}")
+        sys.exit(1)
+
+    # Step 2: Validate database connections
     logger.info("📡 Validating database connections...")
-    if not validate_sqlite_connection(args.sqlite_url, logger):
+    if not validate_sqlite_connection(sqlite_engine, logger):
         sys.exit(1)
 
-    if not validate_postgresql_connection(args.postgresql_url, logger):
+    if not validate_postgresql_connection(postgresql_engine, logger):
         sys.exit(1)
 
-    # Step 2: Setup Alembic for schema management
+    # Step 3: Setup Alembic for schema management
     logger.info("⚙️  Setting up Alembic configuration...")
     alembic_cfg = setup_alembic_config(
         args.postgresql_url,
@@ -967,24 +961,23 @@ def main():
     if not alembic_cfg:
         sys.exit(1)
 
-    # Step 3: Check existing schema and get confirmation
+    # Step 4: Check existing schema and get confirmation
     logger.info("🔍 Checking existing PostgreSQL schema...")
-    if not check_existing_postgresql_schema(args.postgresql_url, logger, args.yes):
+    if not check_existing_postgresql_schema(postgresql_engine, logger, args.yes):
         logger.info("Migration cancelled by user")
         sys.exit(0)
 
-    # Step 4: Clear existing database for clean schema
+    # Step 5: Clear existing database for clean schema
     logger.info("🧹 Clearing PostgreSQL database for clean migration...")
-    if not clear_postgresql_database(args.postgresql_url, logger):
+    if not clear_postgresql_database(postgresql_engine, logger):
         sys.exit(1)
 
-    # Step 5: Apply Alembic migrations
+    # Step 6: Apply Alembic migrations
     logger.info("📋 Applying Alembic migrations...")
     if not apply_alembic_migrations(alembic_cfg, args.postgresql_url, logger):
         sys.exit(1)
 
     # Completely reinitialize logging system after Alembic interference
-    import importlib
     importlib.reload(logging)
 
     # Clear all existing loggers and handlers
@@ -998,17 +991,17 @@ def main():
 
     # Create completely fresh logger
     logger = setup_logging(args.verbose)
-    logger.info("🔧 Logger restored after Alembic interference")
+    logger.info("🔧 Logger restored after Alembic execution")
 
-    # Step 5.1: Verify schema was created
+    # Step 7: Verify schema was created
     logger.info("🔍 Verifying schema creation...")
-    if not verify_schema_creation(args.postgresql_url, logger):
+    if not verify_schema_creation(postgresql_engine, logger):
         logger.error("❌ Schema verification failed - no tables found after Alembic migration")
         sys.exit(1)
 
-    # Step 6: Perform data migration
+    # Step 8: Perform data migration
     logger.info("🚀 Starting data migration...")
-    migration_result = perform_data_migration(args.sqlite_url, args.postgresql_url, args.batch_size, logger)
+    migration_result = perform_data_migration(sqlite_engine, postgresql_engine, args.batch_size, logger)
 
     if not migration_result:
         logger.error("❌ Data migration failed")
@@ -1016,9 +1009,9 @@ def main():
 
     logger.info("✅ Data migration completed successfully")
 
-    # Step 7: Post-migration tasks
+    # Step 9: Post-migration tasks
     logger.info("🔍 Running post-migration validation...")
-    if not post_migration_tasks(args.sqlite_url, args.postgresql_url, logger):
+    if not post_migration_tasks(sqlite_engine, postgresql_engine, logger):
         sys.exit(1)
 
     logger.info("🎉 Migration completed successfully!")
