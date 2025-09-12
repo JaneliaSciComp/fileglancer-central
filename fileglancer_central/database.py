@@ -4,6 +4,7 @@ import os
 
 from sqlalchemy import create_engine, Column, String, Integer, DateTime, JSON, UniqueConstraint
 from sqlalchemy.orm import sessionmaker, declarative_base, Session
+from sqlalchemy.engine.url import make_url
 from typing import Optional, Dict, List
 from loguru import logger
 
@@ -164,11 +165,34 @@ def initialize_database(db_url):
 def _get_engine(db_url):
     """Get or create a cached database engine for the given URL"""
     global _engine_cache
-    
+
     # Return cached engine if it exists
     if db_url in _engine_cache:
         return _engine_cache[db_url]
-    
+
+    url = make_url(db_url)
+    if url.drivername.startswith("sqlite"):
+        if url.database in (None, "", ":memory:"):
+            # In-memory SQLite: shared across connections in the same process
+            # Please do NOT use!! But, if you do, change the uvicorn command
+            # to use --workers 1.
+            engine = create_engine(
+                db_url,
+                connect_args={"check_same_thread": False},
+                poolclass=StaticPool
+            )
+            _engine_cache[db_url] = engine
+            return engine
+
+        # File-based SQLite
+        engine = create_engine(
+            db_url,
+            connect_args={"check_same_thread": False},  # Needed for SQLite with multiple threads
+        )
+        _engine_cache[db_url] = engine
+        return engine
+
+    # For other databases, use connection pooling options
     # Create new engine and cache it
     engine = create_engine(
         db_url,
@@ -178,7 +202,6 @@ def _get_engine(db_url):
         pool_pre_ping=True  # Verify connections before use
     )
     _engine_cache[db_url] = engine
-    
     return engine
 
 def get_db_session(db_url):
@@ -193,7 +216,7 @@ def get_db_session(db_url):
 def dispose_engine(db_url=None):
     """Dispose of cached engine(s) and close connections"""
     global _engine_cache
-    
+
     if db_url is None:
         # Dispose all engines
         for engine in _engine_cache.values():
