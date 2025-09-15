@@ -173,9 +173,7 @@ def _get_engine(db_url):
     url = make_url(db_url)
     if url.drivername.startswith("sqlite"):
         if url.database in (None, "", ":memory:"):
-            # In-memory SQLite: shared across connections in the same process
-            # Please do NOT use!! But, if you do, change the uvicorn command
-            # to use --workers 1.
+            logger.warning("Configuring in-memory SQLite. This is not recommended for production use. Make sure to use --workers 1 when running uvicorn.")
             engine = create_engine(
                 db_url,
                 connect_args={"check_same_thread": False},
