@@ -543,7 +543,7 @@ def get_tickets(session: Session, username: str, fsp_name: str = None, path: str
     return query.all()
 
 
-def create_ticket_entry(session: Session, username: str, fsp_name: str, path: str, ticket_key: str) -> TicketDB:
+def create_ticket(session: Session, username: str, fsp_name: str, path: str, ticket_key: str) -> TicketDB:
     """Create a new ticket entry in the database"""
     now = datetime.now(UTC)
     ticket = TicketDB(
@@ -557,3 +557,8 @@ def create_ticket_entry(session: Session, username: str, fsp_name: str, path: st
     session.add(ticket)
     session.commit()
     return ticket
+
+def delete_ticket(session: Session, ticket_key: str):
+    """Delete a ticket from the database"""
+    session.query(TicketDB).filter_by(ticket_key=ticket_key).delete()
+    session.commit()

@@ -73,11 +73,11 @@ def get_jira_ticket_details(ticket_key: str) -> dict:
     if DEBUG:
         print(json.dumps(issue, indent=4))
 
-    created = parse_datetime(issue['created'])
-    updated = parse_datetime(issue['updated'])  
-    status = issue['status']['name']
-    resolution = issue['resolution']['name'] if issue['resolution'] else "Unresolved"
-    description = issue['description']
+    created = parse_datetime(issue['created']) if 'created' in issue else None
+    updated = parse_datetime(issue['updated']) if 'updated' in issue else None
+    status = issue.get('status', {}).get('name', 'Unknown')
+    resolution = issue.get('resolution', {}).get('name', 'Unresolved') if issue.get('resolution') else "Unresolved"
+    description = issue.get('description', '')
 
     issue_details = {
         'key': ticket_key,
@@ -87,14 +87,24 @@ def get_jira_ticket_details(ticket_key: str) -> dict:
         'resolution': resolution, # E.g. "Unresolved", "Fixed"
         'description': description,
         'link': f"{settings.jira_browse_url}/{ticket_key}",
-        'comments': [{
-            'author_name': c['author']['name'],
-            'author_display_name': c['author']['displayName'],
-            'body': c['body'],
-            'created': parse_datetime(c['created']),
-            'updated': parse_datetime(c['updated'])
-        } for c in issue['comment']['comments']]
+        'comments': []
     }
+
+    # Safely handle comments
+    comments_data = issue.get('comment', {}).get('comments', [])
+    for c in comments_data:
+        try:
+            comment = {
+                'author_name': c.get('author', {}).get('name', 'Unknown'),
+                'author_display_name': c.get('author', {}).get('displayName', 'Unknown'),
+                'body': c.get('body', ''),
+                'created': parse_datetime(c['created']) if 'created' in c else None,
+                'updated': parse_datetime(c['updated']) if 'updated' in c else None
+            }
+            issue_details['comments'].append(comment)
+        except Exception as e:
+            logger.warning(f"Error parsing comment for ticket {ticket_key}: {e}")
+            continue
 
     logger.debug(f"Retrieved details for ticket {ticket_key}: status '{status}', resolution '{resolution}'")
     return issue_details
