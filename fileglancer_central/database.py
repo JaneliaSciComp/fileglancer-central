@@ -5,8 +5,11 @@ import os
 from sqlalchemy import create_engine, Column, String, Integer, DateTime, JSON, UniqueConstraint
 from sqlalchemy.orm import sessionmaker, declarative_base, Session
 from sqlalchemy.engine.url import make_url
+from sqlalchemy.pool import StaticPool
 from typing import Optional, Dict, List
 from loguru import logger
+
+from .settings import get_settings
 
 SHARING_KEY_LENGTH = 12
 
@@ -191,11 +194,14 @@ def _get_engine(db_url):
         return engine
 
     # For other databases, use connection pooling options
+    # Get settings for pool configuration
+    settings = get_settings()
+
     # Create new engine and cache it
     engine = create_engine(
         db_url,
-        pool_size=10,
-        max_overflow=20,
+        pool_size=settings.db_pool_size,
+        max_overflow=settings.db_max_overflow,
         pool_recycle=3600,  # Recycle connections after 1 hour
         pool_pre_ping=True  # Verify connections before use
     )
