@@ -162,7 +162,9 @@ def run_alembic_upgrade(db_url):
 
 def initialize_database(db_url):
     """Initialize database by running migrations. Should be called once at startup."""
+    logger.info(f"Initializing database: {make_url(db_url).render_as_string(hide_password=True)}")
     run_alembic_upgrade(db_url)
+    logger.info("Database initialization completed")
 
 
 def _get_engine(db_url):
@@ -177,25 +179,39 @@ def _get_engine(db_url):
     if url.drivername.startswith("sqlite"):
         if url.database in (None, "", ":memory:"):
             logger.warning("Configuring in-memory SQLite. This is not recommended for production use. Make sure to use --workers 1 when running uvicorn.")
+            logger.info("Creating in-memory SQLite database engine (no connection pooling)")
             engine = create_engine(
                 db_url,
                 connect_args={"check_same_thread": False},
                 poolclass=StaticPool
             )
             _engine_cache[db_url] = engine
+            logger.info(f"In-memory SQLite engine created and cached")
             return engine
 
         # File-based SQLite
+        logger.info(f"Creating file-based SQLite database engine:")
+        logger.info(f"  Database file: {url.database}")
+        logger.info(f"  Connection pooling: disabled (SQLite default)")
         engine = create_engine(
             db_url,
             connect_args={"check_same_thread": False},  # Needed for SQLite with multiple threads
         )
         _engine_cache[db_url] = engine
+        logger.info(f"File-based SQLite engine created and cached for: {url.database}")
         return engine
 
     # For other databases, use connection pooling options
     # Get settings for pool configuration
     settings = get_settings()
+
+    # Log connection pool configuration
+    logger.info(f"Creating database engine with connection pool settings:")
+    logger.info(f"  Database URL: {make_url(db_url).render_as_string(hide_password=True)}")
+    logger.info(f"  Pool size: {settings.db_pool_size}")
+    logger.info(f"  Max overflow: {settings.db_max_overflow}")
+    logger.info(f"  Pool recycle: 3600 seconds")
+    logger.info(f"  Pool pre-ping: enabled")
 
     # Create new engine and cache it
     engine = create_engine(
@@ -206,6 +222,8 @@ def _get_engine(db_url):
         pool_pre_ping=True  # Verify connections before use
     )
     _engine_cache[db_url] = engine
+
+    logger.info(f"Database engine created and cached for: {make_url(db_url).render_as_string(hide_password=True)}")
     return engine
 
 def get_db_session(db_url):
