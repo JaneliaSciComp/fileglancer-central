@@ -12,6 +12,7 @@ from fastapi import FastAPI, HTTPException, Request, Query, Path
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, Response,JSONResponse, PlainTextResponse
 from fastapi.exceptions import RequestValidationError, StarletteHTTPException
+from urllib.parse import quote
 
 from fileglancer_central import database as db
 from fileglancer_central.model import FileSharePath, FileSharePathResponse, Ticket, ProxiedPath, ProxiedPathResponse, ExternalBucket, ExternalBucketResponse, Notification, NotificationResponse
@@ -86,7 +87,7 @@ def _get_synced_external_buckets(db_url, force_refresh=False):
 def _convert_proxied_path(db_path: db.ProxiedPathDB, external_proxy_url: Optional[HttpUrl]) -> ProxiedPath:
     """Convert a database ProxiedPathDB model to a Pydantic ProxiedPath model"""
     if external_proxy_url:
-        url = f"{external_proxy_url}/{db_path.sharing_key}/{db_path.sharing_name}"
+        url = f"{external_proxy_url}/{db_path.sharing_key}/{quote(db_path.sharing_name)}"
     else:
         url = None
     return ProxiedPath(
