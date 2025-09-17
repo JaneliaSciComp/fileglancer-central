@@ -16,8 +16,7 @@ ect owners to add you as a collaborator. After setting up your
 pixi run pypi-upload
 ```
 
-The new version should now be [available on PyPI](https://pypi
-.org/project/fileglancer-central/).
+The new version should now be [available on PyPI](https://pypi.org/project/fileglancer-central/).
 
 Now [draft a new release](https://github.com/JaneliaSciComp/fileglancer/releases/new). Create a new tag that is the same as the version number, and set the release title to the same (e.g. "1.0.0". Click on "Generate release notes" and make any necessary edits.
 
