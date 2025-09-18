@@ -152,15 +152,29 @@ def create_app(settings):
         logger.remove()
         logger.add(sys.stderr, level=settings.log_level)
 
-        logger.trace(f"Settings:")
-        logger.trace(f"  log_level: {settings.log_level}")
-        logger.trace(f"  db_url: {settings.db_url}")
-        logger.trace(f"  use_access_flags: {settings.use_access_flags}")
-        logger.trace(f"  atlassian_url: {settings.atlassian_url}")
+        def mask_password(url: str) -> str:
+            """Mask password in database URL for logging"""
+            import re
+            return re.sub(r'(://[^:]+:)[^@]+(@)', r'\1****\2', url)
+
+        logger.info(f"Settings:")
+        logger.info(f"  log_level: {settings.log_level}")
+        logger.info(f"  db_url: {mask_password(settings.db_url)}")
+        if settings.db_admin_url:
+            logger.info(f"  db_admin_url: {mask_password(settings.db_admin_url)}")
+        logger.info(f"  use_access_flags: {settings.use_access_flags}")
+        logger.info(f"  atlassian_url: {settings.atlassian_url}")
 
         # Initialize database (run migrations once at startup)
         logger.info("Initializing database...")
         db.initialize_database(settings.db_url)
+
+        # Check for notifications file at startup
+        notifications_file = os.path.join(os.getcwd(), "notifications.yaml")
+        if os.path.exists(notifications_file):
+            logger.info(f"Notifications file found: {notifications_file}")
+        else:
+            logger.info(f"No notifications file found at {notifications_file}")
 
         logger.info(f"Server ready")
         yield
@@ -245,7 +259,6 @@ def create_app(settings):
         try:
             # Read notifications from YAML file in current working directory
             notifications_file = os.path.join(os.getcwd(), "notifications.yaml")
-            logger.debug(f"Looking for notifications file at: {notifications_file}")
 
             with open(notifications_file, "r") as f:
                 data = yaml.safe_load(f)
@@ -283,13 +296,13 @@ def create_app(settings):
                             expires_at=expires_at
                         ))
                 except Exception as e:
-                    logger.warning(f"Failed to parse notification {item.get('id', 'unknown')}: {e}")
+                    logger.debug(f"Failed to parse notification {item.get('id', 'unknown')}: {e}")
                     continue
 
             return NotificationResponse(notifications=notifications)
 
         except FileNotFoundError:
-            logger.warning("Notifications file not found")
+            logger.debug("Notifications file not found")
             return NotificationResponse(notifications=[])
         except Exception as e:
             logger.exception(f"Error loading notifications: {e}")
