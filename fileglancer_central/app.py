@@ -34,21 +34,27 @@ from x2s3.client_file import FileProxyClient
 
 # Read version once at module load time
 def _read_version() -> str:
-    """Read version from pyproject.toml file"""
+    """Read version from package metadata or pyproject.toml file"""
     try:
-        # Use os.path instead of Path to avoid any Path-related issues
-        current_file = os.path.abspath(__file__)
-        current_dir = os.path.dirname(current_file)
-        project_root = os.path.dirname(current_dir)
-        pyproject_path = os.path.join(project_root, "pyproject.toml")
+        # First try to get version from installed package metadata
+        from importlib.metadata import version
+        return version("fileglancer-central")
+    except Exception:
+        # Fallback to reading from pyproject.toml during development
+        try:
+            # Use os.path instead of Path to avoid any Path-related issues
+            current_file = os.path.abspath(__file__)
+            current_dir = os.path.dirname(current_file)
+            project_root = os.path.dirname(current_dir)
+            pyproject_path = os.path.join(project_root, "pyproject.toml")
 
-        with open(pyproject_path, "rb") as f:
-            data = tomllib.load(f)
+            with open(pyproject_path, "rb") as f:
+                data = tomllib.load(f)
 
-        return data["project"]["version"]
-    except Exception as e:
-        logger.warning(f"Could not read version from pyproject.toml: {e}")
-        return "unknown"
+            return data["project"]["version"]
+        except Exception as e:
+            logger.warning(f"Could not read version from package metadata or pyproject.toml: {e}")
+            return "unknown"
 
 APP_VERSION = _read_version()
 
