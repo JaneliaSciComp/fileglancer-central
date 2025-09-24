@@ -2,7 +2,13 @@ import os
 import sys
 from datetime import datetime, timezone
 from functools import cache
+from pathlib import Path
 from typing import List, Optional, Dict, Tuple
+
+try:
+    import tomllib
+except ImportError:
+    import tomli as tomllib
 
 import yaml
 from loguru import logger
@@ -24,6 +30,33 @@ from fileglancer_central.proxy_context import ProxyContext, AccessFlagsProxyCont
 
 from x2s3.utils import get_read_access_acl, get_nosuchbucket_response, get_error_response
 from x2s3.client_file import FileProxyClient
+
+
+# Read version once at module load time
+def _read_version() -> str:
+    """Read version from package metadata or pyproject.toml file"""
+    try:
+        # First try to get version from installed package metadata
+        from importlib.metadata import version
+        return version("fileglancer-central")
+    except Exception:
+        # Fallback to reading from pyproject.toml during development
+        try:
+            # Use os.path instead of Path to avoid any Path-related issues
+            current_file = os.path.abspath(__file__)
+            current_dir = os.path.dirname(current_file)
+            project_root = os.path.dirname(current_dir)
+            pyproject_path = os.path.join(project_root, "pyproject.toml")
+
+            with open(pyproject_path, "rb") as f:
+                data = tomllib.load(f)
+
+            return data["project"]["version"]
+        except Exception as e:
+            logger.warning(f"Could not read version from package metadata or pyproject.toml: {e}")
+            return "unknown"
+
+APP_VERSION = _read_version()
 
 
 
@@ -210,6 +243,12 @@ def create_app(settings):
     @app.get('/robots.txt', response_class=PlainTextResponse)
     def robots():
         return """User-agent: *\nDisallow: /"""
+
+
+    @app.get("/version", response_model=dict,
+             description="Get the current version of the server")
+    async def version_endpoint():
+        return {"version": APP_VERSION}
 
 
     @app.get("/file-share-paths", response_model=FileSharePathResponse,
