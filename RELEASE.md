@@ -1,6 +1,6 @@
 # Making a new release of Fileglancer Central
 
-Start by bumping the version number in `pyproject.yaml` using [semantic versioning](https://semver.org). Make sure this is pushed to GitHub on the main branch.
+Start by bumping the version number in `pyproject.toml` using [semantic versioning](https://semver.org). Make sure this is pushed to GitHub on the main branch.
 
 Build the distribution bundle:
 
@@ -18,5 +18,5 @@ pixi run pypi-upload
 
 The new version should now be [available on PyPI](https://pypi.org/project/fileglancer-central/).
 
-Now [draft a new release](https://github.com/JaneliaSciComp/fileglancer/releases/new). Create a new tag that is the same as the version number, and set the release title to the same (e.g. "1.0.0". Click on "Generate release notes" and make any necessary edits.
+Now [draft a new release](https://github.com/JaneliaSciComp/fileglancer-central/releases/new). Create a new tag that is the same as the version number, and set the release title to the same (e.g. "1.0.0". Click on "Generate release notes" and make any necessary edits.
 
