@@ -61,9 +61,13 @@ def get_file_share_paths() -> tuple[list[dict], datetime]:
     # Fill missing values in the table from above values
     for column in table.columns:
         last_valid_value = None
-        for index, value in table[column].items():
-            if pd.isna(value):
+        for index, value in table[column].items():  
+            if column != 'group' and pd.isna(value):
                 table.at[index, column] = last_valid_value
+            elif column == 'group' and table.at[index, 'lab'] == 'Public share':
+                table.at[index, column] = 'public'
+            elif column == 'group' and (pd.isna(value) or value == ''):
+                table.at[index, column] = ''
             else:
                 last_valid_value = value
     
