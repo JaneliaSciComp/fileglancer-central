@@ -268,9 +268,12 @@ def get_all_paths(session):
     return session.query(FileSharePathDB).all()
 
 
-def get_all_external_buckets(session):
+def get_all_external_buckets(session, fsp_name: Optional[str] = None):
     """Get all external buckets from the database"""
-    return session.query(ExternalBucketDB).all()
+    query = session.query(ExternalBucketDB)
+    if fsp_name:
+        query = query.filter_by(fsp_name=fsp_name)
+    return query.all()
 
 
 def get_last_refresh(session, table_name: str):
@@ -322,7 +325,7 @@ def update_file_share_paths(session, paths, table_last_updated, max_paths_to_del
 
     logger.debug(f"Updated {num_existing} file share paths, added {num_new} file share paths")
 
-    # Delete records that no longer exist in the wiki
+    # Delete records that no longer exist in the source
     paths_to_delete = existing_paths - new_paths
     if paths_to_delete:
         if len(paths_to_delete) > max_paths_to_delete:

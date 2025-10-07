@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     # If true, use seteuid/setegid for file access
     use_access_flags: bool = False
 
-    # Atlassian settings for accessing the Wiki and JIRA services
+    # Atlassian settings for accessing JIRA services
     atlassian_url: Optional[HttpUrl] = None
     atlassian_username: Optional[str] = None
     atlassian_token: Optional[str] = None

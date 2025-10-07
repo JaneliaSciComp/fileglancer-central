@@ -1,6 +1,6 @@
 # Fileglancer Central
 
-Central data service for [Fileglancer](https://github.com/JaneliaSciComp/fileglancer) deployments which makes it possible for Fileglancer to access Janelia services such as JIRA and the Janelia Confluence Wiki. 
+Central data service for [Fileglancer](https://github.com/JaneliaSciComp/fileglancer) deployments which makes it possible for Fileglancer to access Janelia services such as JIRA. 
 
 ## Development install
 
@@ -32,12 +32,12 @@ pixi run dev-launch
 
 See [fileglancer-hub](https://github.com/JaneliaSciComp/fileglancer-hub) for details on production releases.
 
-### Optional: configure file share path source
+### Optional: configure ticket system
 
 > [!NOTE]
-> Currently, the file share paths are only pulled from a Confluence Wiki. Future implementations may allow for other sources of file share paths.
+> Currently, tickets are handled using JIRA. Future implementations may allow for other sources of ticket management systems.
 
-To pull file share paths from Janelia's Confluence wiki, configure the `atlassian_url` in the `config.yaml` file. You also need a Confluence token. Under the "User" menu in the upper right corner of the Confluence UI, click "Profile" and then "Security" and then "Create and manage API tokens". Click "Create API token" and give it a name like "Fileglancer". Copy the token, then create a `.env` file in the repo root with the following content:
+Certain actions are handled using a ticket system so that they can be completed manually, such as complex file conversions. Configure the `atlassian_url` in the `config.yaml` file. You also need a Confluence token. Under the "User" menu in the upper right corner of the Confluence UI, click "Profile" and then "Security" and then "Create and manage API tokens". Click "Create API token" and give it a name like "Fileglancer". Copy the token, then create a `.env` file in the repo root with the following content:
 
 ```
 FGC_ATLASSIAN_USERNAME=your_email
@@ -49,13 +49,7 @@ You should set the permissions on the `.env` file so that only the owner can rea
 chmod 600 .env
 ```
 
-### Optional: configure ticket system
-
-> [!NOTE]
-> Currently, tickets are handled using JIRA. Future implementations may allow for other sources of ticket management systems.
-
-Certain actions are handled using a ticket system so that they can be completed manually, such as complex file conversions. To configure JIRA, use the same actions as for the wiki. If necessary, you can customize the JIRA path used for ticket links by overriding `jira_browse_url`.
-
+If necessary, you can customize the JIRA path used for ticket links by overriding `jira_browse_url`.
 
 ## Architecture
 

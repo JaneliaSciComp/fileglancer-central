@@ -176,8 +176,8 @@ def test_get_external_buckets(test_client):
     data = response.json()
     assert "buckets" in data
     assert isinstance(data["buckets"], list)
-    # Should contain external buckets fetched from the wiki
-    # The actual number depends on what's in Confluence
+    # Should contain external buckets from the database
+    # The actual number depends on what's in the database
     assert len(data["buckets"]) >= 0
     
     # Verify structure of returned buckets if any exist
