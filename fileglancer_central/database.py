@@ -475,13 +475,16 @@ def get_proxied_path_by_sharing_key(session: Session, sharing_key: str) -> Optio
 
     # Check cache first - use containment check since we cache None values
     if sharing_key in cache:
+        logger.debug(f"Cache HIT for sharing key: {sharing_key}")
         return cache[sharing_key]
 
     # Query database if not in cache
+    logger.debug(f"Cache MISS for sharing key: {sharing_key}, querying database")
     proxied_path = session.query(ProxiedPathDB).filter_by(sharing_key=sharing_key).first()
 
     # Cache the result (even if None to avoid repeated queries for invalid keys)
     cache[sharing_key] = proxied_path
+    logger.debug(f"Cached result for sharing key: {sharing_key}, cache size: {len(cache)}")
 
     return proxied_path
 
@@ -489,13 +492,19 @@ def get_proxied_path_by_sharing_key(session: Session, sharing_key: str) -> Optio
 def _invalidate_sharing_key_cache(sharing_key: str):
     """Remove a sharing key from the cache"""
     cache = _get_sharing_key_cache()
+    was_present = sharing_key in cache
     cache.pop(sharing_key, None)
+    if was_present:
+        logger.debug(f"Invalidated cache entry for sharing key: {sharing_key}, cache size: {len(cache)}")
 
 
 def _clear_sharing_key_cache():
     """Clear the entire sharing key cache"""
     cache = _get_sharing_key_cache()
+    old_size = len(cache)
     cache.clear()
+    if old_size > 0:
+        logger.debug(f"Cleared entire sharing key cache, removed {old_size} entries")
 
 
 def _validate_proxied_path(session: Session, fsp_name: str, path: str) -> None:
@@ -536,6 +545,7 @@ def create_proxied_path(session: Session, username: str, sharing_name: str, fsp_
     # Cache the new proxied path
     cache = _get_sharing_key_cache()
     cache[sharing_key] = proxied_path
+    logger.debug(f"Cached new proxied path for sharing key: {sharing_key}, cache size: {len(cache)}")
     return proxied_path
 
 
@@ -570,6 +580,7 @@ def update_proxied_path(session: Session,
     # Update cache with the modified object
     cache = _get_sharing_key_cache()
     cache[sharing_key] = proxied_path
+    logger.debug(f"Updated cache entry for sharing key: {sharing_key}, cache size: {len(cache)}")
     return proxied_path
 
 
