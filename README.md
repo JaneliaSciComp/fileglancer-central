@@ -70,16 +70,6 @@ The Fileglancer Central service is a backend service optionally used by Fileglan
 pixi run test
 ```
 
-## Building the Docker container
-
-Run the Docker build, replacing `<version>` with your version number:
-
-```bash
-cd docker/
-export VERSION=<version>
-docker buildx build --platform linux/amd64,linux/arm64 --build-arg GIT_TAG=$VERSION -t ghcr.io/janeliascicomp/fileglancer-central:$VERSION -t ghcr.io/janeliascicomp/fileglancer-central:latest --push .
-```
-
 ## Release
 
 First, increment the version in `pyproject.toml` and push it to GitHub. Create a *Release* there and then publish it to PyPI as follows.
