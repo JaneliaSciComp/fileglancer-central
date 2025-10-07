@@ -44,6 +44,9 @@ class Settings(BaseSettings):
     # Maps to the /files/ end points of the fileglancer-central app.
     external_proxy_url: Optional[HttpUrl] = None
 
+    # Maximum size of the sharing key LRU cache
+    sharing_key_cache_size: int = 1000
+
     model_config = SettingsConfigDict(
         yaml_file="config.yaml",
         env_file='.env',

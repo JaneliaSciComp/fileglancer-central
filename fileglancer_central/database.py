@@ -1,6 +1,7 @@
 import secrets
 from datetime import datetime, UTC
 import os
+from functools import lru_cache
 
 from sqlalchemy import create_engine, Column, String, Integer, DateTime, JSON, UniqueConstraint
 from sqlalchemy.orm import sessionmaker, declarative_base, Session
@@ -8,6 +9,7 @@ from sqlalchemy.engine.url import make_url
 from sqlalchemy.pool import StaticPool
 from typing import Optional, Dict, List
 from loguru import logger
+from cachetools import LRUCache
 
 from .settings import get_settings
 
@@ -18,6 +20,17 @@ _migrations_run = False
 
 # Engine cache - maintain multiple engines for different database URLs
 _engine_cache = {}
+
+# Sharing key cache - LRU cache for ProxiedPathDB objects
+_sharing_key_cache = None
+
+def _get_sharing_key_cache():
+    """Get or initialize the sharing key cache"""
+    global _sharing_key_cache
+    if _sharing_key_cache is None:
+        settings = get_settings()
+        _sharing_key_cache = LRUCache(maxsize=settings.sharing_key_cache_size)
+    return _sharing_key_cache
 
 Base = declarative_base()
 class FileSharePathDB(Base):
@@ -457,8 +470,44 @@ def get_proxied_paths(session: Session, username: str, fsp_name: str = None, pat
 
 
 def get_proxied_path_by_sharing_key(session: Session, sharing_key: str) -> Optional[ProxiedPathDB]:
-    """Get a proxied path by sharing key"""
-    return session.query(ProxiedPathDB).filter_by(sharing_key=sharing_key).first()
+    """Get a proxied path by sharing key with LRU caching"""
+    cache = _get_sharing_key_cache()
+
+    # Check cache first
+    if sharing_key in cache:
+        logger.debug(f"Cache HIT for sharing key: {sharing_key}")
+        return cache[sharing_key]
+
+    # Query database if not in cache
+    logger.debug(f"Cache MISS for sharing key: {sharing_key}, querying database")
+    proxied_path = session.query(ProxiedPathDB).filter_by(sharing_key=sharing_key).first()
+
+    # Only cache valid results (not None)
+    if proxied_path is not None:
+        cache[sharing_key] = proxied_path
+        logger.debug(f"Cached result for sharing key: {sharing_key}, cache size: {len(cache)}")
+    else:
+        logger.debug(f"Not caching None result for sharing key: {sharing_key}")
+
+    return proxied_path
+
+
+def _invalidate_sharing_key_cache(sharing_key: str):
+    """Remove a sharing key from the cache"""
+    cache = _get_sharing_key_cache()
+    was_present = sharing_key in cache
+    cache.pop(sharing_key, None)
+    if was_present:
+        logger.debug(f"Invalidated cache entry for sharing key: {sharing_key}, cache size: {len(cache)}")
+
+
+def _clear_sharing_key_cache():
+    """Clear the entire sharing key cache"""
+    cache = _get_sharing_key_cache()
+    old_size = len(cache)
+    cache.clear()
+    if old_size > 0:
+        logger.debug(f"Cleared entire sharing key cache, removed {old_size} entries")
 
 
 def _validate_proxied_path(session: Session, fsp_name: str, path: str) -> None:
@@ -484,7 +533,7 @@ def create_proxied_path(session: Session, username: str, sharing_name: str, fsp_
 
     sharing_key = secrets.token_urlsafe(SHARING_KEY_LENGTH)
     now = datetime.now(UTC)
-    session.add(ProxiedPathDB(
+    proxied_path = ProxiedPathDB(
         username=username,
         sharing_key=sharing_key,
         sharing_name=sharing_name,
@@ -492,9 +541,15 @@ def create_proxied_path(session: Session, username: str, sharing_name: str, fsp_
         path=path,
         created_at=now,
         updated_at=now
-    ))
+    )
+    session.add(proxied_path)
     session.commit()
-    return get_proxied_path_by_sharing_key(session, sharing_key)
+
+    # Cache the new proxied path
+    cache = _get_sharing_key_cache()
+    cache[sharing_key] = proxied_path
+    logger.debug(f"Cached new proxied path for sharing key: {sharing_key}, cache size: {len(cache)}")
+    return proxied_path
 
 
 def update_proxied_path(session: Session,
@@ -521,8 +576,14 @@ def update_proxied_path(session: Session,
         proxied_path.path = new_path
 
     _validate_proxied_path(session, proxied_path.fsp_name, proxied_path.path)
+    proxied_path.updated_at = datetime.now(UTC)
 
     session.commit()
+
+    # Update cache with the modified object
+    cache = _get_sharing_key_cache()
+    cache[sharing_key] = proxied_path
+    logger.debug(f"Updated cache entry for sharing key: {sharing_key}, cache size: {len(cache)}")
     return proxied_path
 
 
@@ -530,6 +591,9 @@ def delete_proxied_path(session: Session, username: str, sharing_key: str):
     """Delete a proxied path"""
     session.query(ProxiedPathDB).filter_by(username=username, sharing_key=sharing_key).delete()
     session.commit()
+
+    # Remove from cache
+    _invalidate_sharing_key_cache(sharing_key)
 
 
 def get_tickets(session: Session, username: str, fsp_name: str = None, path: str = None) -> List[TicketDB]:

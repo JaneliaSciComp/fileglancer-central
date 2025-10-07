@@ -46,3 +46,10 @@ use_access_flags: True
 #
 external_proxy_url: http://localhost:7878/files
 
+#
+# Maximum size of the sharing key LRU cache
+# This controls how many sharing key lookups are cached in memory
+# Higher values use more memory but reduce database queries
+#
+sharing_key_cache_size: 1000
+
