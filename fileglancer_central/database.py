@@ -473,7 +473,7 @@ def get_proxied_path_by_sharing_key(session: Session, sharing_key: str) -> Optio
     """Get a proxied path by sharing key with LRU caching"""
     cache = _get_sharing_key_cache()
 
-    # Check cache first - use containment check since we cache None values
+    # Check cache first
     if sharing_key in cache:
         logger.debug(f"Cache HIT for sharing key: {sharing_key}")
         return cache[sharing_key]
@@ -482,9 +482,12 @@ def get_proxied_path_by_sharing_key(session: Session, sharing_key: str) -> Optio
     logger.debug(f"Cache MISS for sharing key: {sharing_key}, querying database")
     proxied_path = session.query(ProxiedPathDB).filter_by(sharing_key=sharing_key).first()
 
-    # Cache the result (even if None to avoid repeated queries for invalid keys)
-    cache[sharing_key] = proxied_path
-    logger.debug(f"Cached result for sharing key: {sharing_key}, cache size: {len(cache)}")
+    # Only cache valid results (not None)
+    if proxied_path is not None:
+        cache[sharing_key] = proxied_path
+        logger.debug(f"Cached result for sharing key: {sharing_key}, cache size: {len(cache)}")
+    else:
+        logger.debug(f"Not caching None result for sharing key: {sharing_key}")
 
     return proxied_path
 
