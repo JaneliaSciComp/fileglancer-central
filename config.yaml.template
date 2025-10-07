@@ -42,6 +42,13 @@ use_access_flags: True
 #atlassian_url: https://YOURID.atlassian.net
 
 #
+# Atlassian authentication credentials
+# These can also be set via environment variables FGC_ATLASSIAN_USERNAME and FGC_ATLASSIAN_TOKEN
+#
+#atlassian_username: your_email
+#atlassian_token: your_confluence_token
+
+#
 # External URL for proxied paths
 #
 external_proxy_url: http://localhost:7878/files
