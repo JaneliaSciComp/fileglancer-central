@@ -47,6 +47,9 @@ class Settings(BaseSettings):
     # Maximum size of the sharing key LRU cache
     sharing_key_cache_size: int = 1000
 
+    # How often to update file share paths and external buckets from Atlassian (in minutes)
+    atlassian_update_interval_minutes: int = 60
+
     model_config = SettingsConfigDict(
         yaml_file="config.yaml",
         env_file='.env',

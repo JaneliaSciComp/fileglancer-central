@@ -27,6 +27,7 @@ from fileglancer_central.wiki import get_file_share_paths, get_external_buckets
 from fileglancer_central.issues import create_jira_ticket, get_jira_ticket_details, delete_jira_ticket
 from fileglancer_central.utils import slugify_path
 from fileglancer_central.proxy_context import ProxyContext, AccessFlagsProxyContext
+from fileglancer_central.scheduler import schedule_job, start_scheduler, stop_scheduler
 
 from x2s3.utils import get_read_access_acl, get_nosuchbucket_response, get_error_response
 from x2s3.client_file import FileProxyClient
@@ -108,6 +109,93 @@ def _get_synced_external_buckets(db_url, force_refresh=False):
             except Exception as e:
                 logger.error(f"Error updating external buckets: {e}")
 
+        return [ExternalBucket(
+            id=bucket.id,
+            full_path=bucket.full_path,
+            external_url=bucket.external_url,
+            fsp_name=bucket.fsp_name,
+            relative_path=bucket.relative_path
+        ) for bucket in db.get_all_external_buckets(session)]
+
+
+def _scheduled_update_file_share_paths(db_url: str) -> None:
+    """Scheduled update of file share paths from Atlassian wiki."""
+    try:
+        logger.info("Running scheduled update of file share paths...")
+        with db.get_db_session(db_url) as session:
+            # Get updated paths from the wiki
+            new_paths, table_last_updated = get_file_share_paths()
+
+            # Get the last refresh time from the database
+            last_refresh = db.get_last_refresh(session, "file_share_paths")
+
+            if not last_refresh or table_last_updated != last_refresh.source_last_updated:
+                logger.info("Wiki has changed, updating file share paths...")
+                db.update_file_share_paths(session, new_paths, table_last_updated)
+                logger.info(f"Updated {len(new_paths)} file share paths")
+            else:
+                logger.debug("No changes detected in file share paths")
+    except Exception as e:
+        logger.error(f"Error in scheduled file share paths update: {e}")
+
+
+def _scheduled_update_external_buckets(db_url: str) -> None:
+    """Scheduled update of external buckets from Atlassian wiki."""
+    try:
+        logger.info("Running scheduled update of external buckets...")
+        with db.get_db_session(db_url) as session:
+            # Get updated buckets from the wiki
+            new_buckets, table_last_updated = get_external_buckets()
+
+            # Get the last refresh time from the database
+            last_refresh = db.get_last_refresh(session, "external_buckets")
+
+            if not last_refresh or table_last_updated != last_refresh.source_last_updated:
+                logger.info("Wiki has changed, updating external buckets...")
+                db.update_external_buckets(session, new_buckets, table_last_updated)
+                logger.info(f"Updated {len(new_buckets)} external buckets")
+            else:
+                logger.debug("No changes detected in external buckets")
+    except Exception as e:
+        logger.error(f"Error in scheduled external buckets update: {e}")
+
+
+# Global variable to store db_url for scheduled functions
+_scheduled_db_url = None
+
+
+def scheduled_file_share_paths_update():
+    """Wrapper function for scheduled file share paths update (serializable)."""
+    global _scheduled_db_url
+    if _scheduled_db_url:
+        _scheduled_update_file_share_paths(_scheduled_db_url)
+
+
+def scheduled_external_buckets_update():
+    """Wrapper function for scheduled external buckets update (serializable)."""
+    global _scheduled_db_url
+    if _scheduled_db_url:
+        _scheduled_update_external_buckets(_scheduled_db_url)
+
+
+def _get_cached_wiki_paths(db_url: str) -> list[FileSharePath]:
+    """Get file share paths from database cache only (non-blocking)."""
+    with db.get_db_session(db_url) as session:
+        return [FileSharePath(
+            name=path.name,
+            zone=path.zone,
+            group=path.group,
+            storage=path.storage,
+            mount_path=path.mount_path,
+            mac_path=path.mac_path,
+            windows_path=path.windows_path,
+            linux_path=path.linux_path,
+        ) for path in db.get_all_paths(session)]
+
+
+def _get_cached_external_buckets(db_url: str) -> list[ExternalBucket]:
+    """Get external buckets from database cache only (non-blocking)."""
+    with db.get_db_session(db_url) as session:
         return [ExternalBucket(
             id=bucket.id,
             full_path=bucket.full_path,
@@ -202,6 +290,47 @@ def create_app(settings):
         logger.info("Initializing database...")
         db.initialize_database(settings.db_url)
 
+        # Set up scheduled updates for Atlassian data if configured
+        if settings.atlassian_url and settings.atlassian_update_interval_minutes > 0:
+            logger.info(f"Setting up scheduled Atlassian updates every {settings.atlassian_update_interval_minutes} minutes")
+
+            # Set global db_url for scheduled functions
+            global _scheduled_db_url
+            _scheduled_db_url = settings.db_url
+
+            # Schedule file share paths updates using serializable functions
+            schedule_job(
+                scheduled_file_share_paths_update,
+                settings.atlassian_update_interval_minutes,
+                "file_share_paths_update",
+                settings.db_url
+            )
+
+            # Schedule external buckets updates using serializable functions
+            schedule_job(
+                scheduled_external_buckets_update,
+                settings.atlassian_update_interval_minutes,
+                "external_buckets_update",
+                settings.db_url
+            )
+
+            # Start the scheduler with shared database jobstore
+            start_scheduler(settings.db_url)
+
+            # Run initial updates immediately to populate the cache
+            logger.info("Running initial Atlassian data sync...")
+            try:
+                _scheduled_update_file_share_paths(settings.db_url)
+                _scheduled_update_external_buckets(settings.db_url)
+                logger.info("Initial Atlassian data sync completed")
+            except Exception as e:
+                logger.error(f"Error during initial Atlassian data sync: {e}")
+        else:
+            if not settings.atlassian_url:
+                logger.info("Atlassian URL not configured, skipping scheduled updates")
+            else:
+                logger.info("Atlassian update interval set to 0, automatic updates disabled")
+
         # Check for notifications file at startup
         notifications_file = os.path.join(os.getcwd(), "notifications.yaml")
         if os.path.exists(notifications_file):
@@ -211,8 +340,10 @@ def create_app(settings):
 
         logger.info(f"Server ready")
         yield
-        # Cleanup (if needed)
-        pass
+
+        # Cleanup scheduler on shutdown
+        logger.info("Shutting down scheduler...")
+        stop_scheduler()
 
     app = FastAPI(lifespan=lifespan)
     app.add_middleware(
@@ -262,7 +393,12 @@ def create_app(settings):
             raise HTTPException(status_code=500, detail="Confluence is not configured")
 
         if atlassian_url:
-            paths = _get_synced_wiki_paths(settings.db_url, force_refresh)
+            if force_refresh:
+                # For force refresh, use the original blocking method
+                paths = _get_synced_wiki_paths(settings.db_url, force_refresh)
+            else:
+                # Use cached data for normal requests (non-blocking)
+                paths = _get_cached_wiki_paths(settings.db_url)
         else:
             paths = [FileSharePath(
                 name=slugify_path(path),
@@ -280,14 +416,20 @@ def create_app(settings):
     @app.get("/external-buckets", response_model=ExternalBucketResponse,
              description="Get all external buckets from the database")
     async def get_external_buckets(force_refresh: bool = False) -> ExternalBucketResponse:
-        buckets = _get_synced_external_buckets(settings.db_url, force_refresh)
+        if force_refresh:
+            # For force refresh, use the original blocking method
+            buckets = _get_synced_external_buckets(settings.db_url, force_refresh)
+        else:
+            # Use cached data for normal requests (non-blocking)
+            buckets = _get_cached_external_buckets(settings.db_url)
         return ExternalBucketResponse(buckets=buckets)
 
 
     @app.get("/external-buckets/{fsp_name}", response_model=ExternalBucketResponse,
              description="Get the external buckets for a given FSP name")
-    async def get_external_buckets(fsp_name: str) -> ExternalBucket:
-        buckets = _get_synced_external_buckets(settings.db_url, False)
+    async def get_external_buckets_by_fsp(fsp_name: str) -> ExternalBucket:
+        # Use cached data for FSP-specific requests (non-blocking)
+        buckets = _get_cached_external_buckets(settings.db_url)
         filtered_buckets = [bucket for bucket in buckets if bucket.fsp_name == fsp_name]
         return ExternalBucketResponse(buckets=filtered_buckets)
 
@@ -383,7 +525,7 @@ def create_app(settings):
                 if db_ticket is None:
                     raise HTTPException(status_code=500, detail="Failed to create ticket entry in database")
 
-                # Get the full ticket details from JIRA 
+                # Get the full ticket details from JIRA
                 ticket_details = get_jira_ticket_details(jira_ticket['key'])
 
                 # Return DTO with details from both JIRA and database
@@ -401,9 +543,9 @@ def create_app(settings):
     async def get_tickets(username: str = Path(..., description="The username of the user who created the tickets"),
                           fsp_name: Optional[str] = Query(None, description="The name of the file share path that the ticket is associated with"),
                           path: Optional[str] = Query(None, description="The path that the ticket is associated with")):
-        
+
         with db.get_db_session(settings.db_url) as session:
-            
+
             db_tickets = db.get_tickets(session, username, fsp_name, path)
             if not db_tickets:
                 raise HTTPException(status_code=404, detail="No tickets found for this user")
@@ -419,7 +561,7 @@ def create_app(settings):
                     logger.warning(f"Could not retrieve details for ticket {db_ticket.ticket_key}: {e}")
                     ticket.description = f"Ticket {db_ticket.ticket_key} is no longer available in JIRA"
                     ticket.status = "Deleted"
-                
+
             return tickets
 
 

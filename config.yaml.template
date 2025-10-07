@@ -53,3 +53,9 @@ external_proxy_url: http://localhost:7878/files
 #
 sharing_key_cache_size: 1000
 
+#
+# How often to update file share paths and external buckets from Atlassian (in minutes)
+# Set to 0 to disable automatic updates (data will only be updated on server restart)
+#
+atlassian_update_interval_minutes: 60
+
