@@ -23,7 +23,6 @@ from urllib.parse import quote
 from fileglancer_central import database as db
 from fileglancer_central.model import FileSharePath, FileSharePathResponse, Ticket, ProxiedPath, ProxiedPathResponse, ExternalBucket, ExternalBucketResponse, Notification, NotificationResponse
 from fileglancer_central.settings import get_settings
-from fileglancer_central.wiki import get_file_share_paths, get_external_buckets
 from fileglancer_central.issues import create_jira_ticket, get_jira_ticket_details, delete_jira_ticket
 from fileglancer_central.utils import slugify_path
 from fileglancer_central.proxy_context import ProxyContext, AccessFlagsProxyContext
@@ -59,62 +58,15 @@ def _read_version() -> str:
 APP_VERSION = _read_version()
 
 
-
-def _get_synced_wiki_paths(db_url, force_refresh=False):
+def _get_external_buckets(db_url, fsp_name: Optional[str] = None):
     with db.get_db_session(db_url) as session:
-        # Get the last refresh time from the database
-        last_refresh = db.get_last_refresh(session, "file_share_paths")
-
-        # Check if we need to refresh the file share paths
-        if not last_refresh or (datetime.now() - last_refresh.db_last_updated).days >= 1 or force_refresh:
-            logger.info("Last refresh was more than a day ago, checking for updates...")
-
-            try:
-                # Get updated paths from the wiki
-                new_paths, table_last_updated = get_file_share_paths()
-                if not last_refresh or table_last_updated != last_refresh.source_last_updated:
-                    logger.info("Wiki has changed, refreshing file share paths...")
-                    db.update_file_share_paths(session, new_paths, table_last_updated)
-            except Exception as e:
-                logger.error(f"Error updating wiki paths: {e}")
-
-        return [FileSharePath(
-            name=path.name,
-            zone=path.zone,
-            group=path.group,
-            storage=path.storage,
-            mount_path=path.mount_path,
-            mac_path=path.mac_path,
-            windows_path=path.windows_path,
-            linux_path=path.linux_path,
-        ) for path in db.get_all_paths(session)]
-
-
-def _get_synced_external_buckets(db_url, force_refresh=False):
-    with db.get_db_session(db_url) as session:
-        # Get the last refresh time from the database
-        last_refresh = db.get_last_refresh(session, "external_buckets")
-
-        # Check if we need to refresh the external buckets
-        if not last_refresh or (datetime.now() - last_refresh.db_last_updated).days >= 1 or force_refresh:
-            logger.info("Last refresh was more than a day ago, checking for updates...")
-
-            try:
-                # Get updated buckets from the wiki
-                new_buckets, table_last_updated = get_external_buckets()
-                if not last_refresh or table_last_updated != last_refresh.source_last_updated:
-                    logger.info("Wiki has changed, refreshing external buckets...")
-                    db.update_external_buckets(session, new_buckets, table_last_updated)
-            except Exception as e:
-                logger.error(f"Error updating external buckets: {e}")
-
         return [ExternalBucket(
             id=bucket.id,
             full_path=bucket.full_path,
             external_url=bucket.external_url,
             fsp_name=bucket.fsp_name,
             relative_path=bucket.relative_path
-        ) for bucket in db.get_all_external_buckets(session)]
+        ) for bucket in db.get_all_external_buckets(session, fsp_name)]
 
 
 def _convert_proxied_path(db_path: db.ProxiedPathDB, external_proxy_url: Optional[HttpUrl]) -> ProxiedPath:
@@ -253,17 +205,9 @@ def create_app(settings):
 
     @app.get("/file-share-paths", response_model=FileSharePathResponse,
              description="Get all file share paths from the database")
-    async def get_file_share_paths(force_refresh: bool = False) -> List[FileSharePath]:
-
-        atlassian_url = settings.atlassian_url
+    async def get_file_share_paths() -> List[FileSharePath]:
         file_share_mounts = settings.file_share_mounts
-        if not atlassian_url and not file_share_mounts:
-            logger.error("You must configure `atlassian_url` or set `file_share_mounts`.")
-            raise HTTPException(status_code=500, detail="Confluence is not configured")
-
-        if atlassian_url:
-            paths = _get_synced_wiki_paths(settings.db_url, force_refresh)
-        else:
+        if file_share_mounts:
             paths = [FileSharePath(
                 name=slugify_path(path),
                 zone='Local',
@@ -274,22 +218,33 @@ def create_app(settings):
                 windows_path=path,
                 linux_path=path,
             ) for path in file_share_mounts]
+        else:
+            with db.get_db_session(settings.db_url) as session:
+                paths = [FileSharePath(
+                    name=path.name,
+                    zone=path.zone,
+                    group=path.group,
+                    storage=path.storage,
+                    mount_path=path.mount_path,
+                    mac_path=path.mac_path,
+                    windows_path=path.windows_path,
+                    linux_path=path.linux_path,
+                ) for path in db.get_all_paths(session)]
 
         return FileSharePathResponse(paths=paths)
 
     @app.get("/external-buckets", response_model=ExternalBucketResponse,
              description="Get all external buckets from the database")
-    async def get_external_buckets(force_refresh: bool = False) -> ExternalBucketResponse:
-        buckets = _get_synced_external_buckets(settings.db_url, force_refresh)
+    async def get_external_buckets() -> ExternalBucketResponse:
+        buckets = _get_external_buckets(settings.db_url)
         return ExternalBucketResponse(buckets=buckets)
 
 
     @app.get("/external-buckets/{fsp_name}", response_model=ExternalBucketResponse,
              description="Get the external buckets for a given FSP name")
     async def get_external_buckets(fsp_name: str) -> ExternalBucket:
-        buckets = _get_synced_external_buckets(settings.db_url, False)
-        filtered_buckets = [bucket for bucket in buckets if bucket.fsp_name == fsp_name]
-        return ExternalBucketResponse(buckets=filtered_buckets)
+        buckets = _get_external_buckets(settings.db_url, fsp_name)
+        return ExternalBucketResponse(buckets=buckets)
 
 
     @app.get("/notifications", response_model=NotificationResponse,
