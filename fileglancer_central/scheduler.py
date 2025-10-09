@@ -82,3 +82,5 @@ def schedule_job(func: Callable, interval_minutes: int, job_id: str, db_url: Opt
     )
 
     logger.info(f"Scheduled job '{job_id}' to run every {interval_minutes} minutes using APScheduler")
+
+

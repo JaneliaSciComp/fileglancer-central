@@ -117,6 +117,7 @@ class TicketDB(Base):
     # )
 
 
+
 def run_alembic_upgrade(db_url):
     """Run Alembic migrations to upgrade database to latest version"""
     global _migrations_run
@@ -626,3 +627,5 @@ def delete_ticket(session: Session, ticket_key: str):
     """Delete a ticket from the database"""
     session.query(TicketDB).filter_by(ticket_key=ticket_key).delete()
     session.commit()
+
+

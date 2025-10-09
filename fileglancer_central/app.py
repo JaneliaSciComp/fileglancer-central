@@ -178,6 +178,29 @@ def scheduled_external_buckets_update():
         _scheduled_update_external_buckets(_scheduled_db_url)
 
 
+def initial_atlassian_sync():
+    """Wrapper function for initial Atlassian data sync (serializable)."""
+    global _scheduled_db_url
+    if _scheduled_db_url:
+        # Check if initial sync is needed by looking at database state
+        with db.get_db_session(_scheduled_db_url) as session:
+            # Check if we have any data - if we do, initial sync was already done
+            file_share_paths_count = session.query(db.FileSharePathDB).count()
+            external_buckets_count = session.query(db.ExternalBucketDB).count()
+
+            if file_share_paths_count > 0 or external_buckets_count > 0:
+                logger.debug("Initial Atlassian data already exists, skipping sync")
+                return
+
+        logger.info("Running initial Atlassian data sync via scheduler...")
+        try:
+            _scheduled_update_file_share_paths(_scheduled_db_url)
+            _scheduled_update_external_buckets(_scheduled_db_url)
+            logger.info("Initial Atlassian data sync completed via scheduler")
+        except Exception as e:
+            logger.error(f"Error during initial Atlassian data sync: {e}")
+
+
 def _get_cached_wiki_paths(db_url: str) -> list[FileSharePath]:
     """Get file share paths from database cache only (non-blocking)."""
     with db.get_db_session(db_url) as session:
@@ -317,14 +340,71 @@ def create_app(settings):
             # Start the scheduler with shared database jobstore
             start_scheduler(settings.db_url)
 
-            # Run initial updates immediately to populate the cache
-            logger.info("Running initial Atlassian data sync...")
-            try:
-                _scheduled_update_file_share_paths(settings.db_url)
-                _scheduled_update_external_buckets(settings.db_url)
-                logger.info("Initial Atlassian data sync completed")
-            except Exception as e:
-                logger.error(f"Error during initial Atlassian data sync: {e}")
+            # Run initial sync immediately in a background thread to avoid startup delay
+            import threading
+            import uuid
+            import os
+
+            def run_immediate_sync():
+                worker_id = f"worker-{os.getpid()}-{uuid.uuid4().hex[:8]}"
+
+                # Use database-based coordination for better reliability
+                with db.get_db_session(settings.db_url) as session:
+                    try:
+                        from sqlalchemy import text
+                        from datetime import datetime, UTC, timedelta
+
+                        now = datetime.now(UTC)
+                        expires_at = now + timedelta(minutes=5)
+
+                        # Try to insert a coordination record - only one worker will succeed
+                        session.execute(text("""
+                            INSERT INTO user_preferences (username, key, value)
+                            VALUES ('__system__', 'initial_sync_lock', :lock_data)
+                            ON CONFLICT (username, key) DO NOTHING
+                        """), {
+                            'lock_data': {
+                                'worker_id': worker_id,
+                                'acquired_at': now.isoformat(),
+                                'expires_at': expires_at.isoformat()
+                            }
+                        })
+                        session.commit()
+
+                        # Check if we got the lock by seeing if our worker_id is in the record
+                        result = session.execute(text("""
+                            SELECT value FROM user_preferences
+                            WHERE username = '__system__' AND key = 'initial_sync_lock'
+                        """)).fetchone()
+
+                        if result and result[0].get('worker_id') == worker_id:
+                            logger.info(f"Worker {worker_id} acquired database lock, running immediate initial sync...")
+                            initial_atlassian_sync()
+
+                            # Clean up the lock when done
+                            session.execute(text("""
+                                DELETE FROM user_preferences
+                                WHERE username = '__system__' AND key = 'initial_sync_lock'
+                            """))
+                            session.commit()
+                        else:
+                            logger.info(f"Worker {worker_id} could not acquire lock, another worker is handling initial sync")
+
+                    except Exception as e:
+                        logger.debug(f"Error with database coordination: {e}")
+                        # Check if data already exists before falling back
+                        file_share_paths_count = session.query(db.FileSharePathDB).count()
+                        external_buckets_count = session.query(db.ExternalBucketDB).count()
+
+                        if file_share_paths_count == 0 and external_buckets_count == 0:
+                            logger.info(f"Worker {worker_id} falling back to uncoordinated sync (no data exists)")
+                            initial_atlassian_sync()
+                        else:
+                            logger.info(f"Worker {worker_id} skipping sync - data already exists")
+
+            # Start the immediate sync in a separate thread
+            sync_thread = threading.Thread(target=run_immediate_sync, daemon=True)
+            sync_thread.start()
         else:
             if not settings.atlassian_url:
                 logger.info("Atlassian URL not configured, skipping scheduled updates")

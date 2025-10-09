@@ -71,6 +71,7 @@ dev-launch-remote = "pixi run uvicorn fileglancer_central.app:app --host 0.0.0.0
 migrate = "alembic upgrade head"
 migrate-create = "alembic revision --autogenerate"
 stamp-db = "python -m fileglancer_central.stamp_db"
+start = "uvicorn fileglancer_central.app:app --host 127.0.0.1 --workers 10 --port 8989"
 
 [tool.pixi.feature.test.tasks]
 test-install = "pip install -e ."
