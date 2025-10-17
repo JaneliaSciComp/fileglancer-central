@@ -1,6 +1,9 @@
 # Fileglancer Central
 
-Central data service for [Fileglancer](https://github.com/JaneliaSciComp/fileglancer) deployments which makes it possible for Fileglancer to access Janelia services such as JIRA. 
+> [!WARNING]  
+> This code was merged into [Fileglancer](https://github.com/JaneliaSciComp/fileglancer) and this repo is no longer in use. 
+
+Central data service for Fileglancer deployments which makes it possible for Fileglancer to access Janelia services such as JIRA. 
 
 ## Development install
 
